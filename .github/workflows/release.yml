@@ -133,14 +133,35 @@ jobs:
         env:
           VTKEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STRICT: ${{ secrets.RELEASE_STRICT_VERIFY }}
         run: |
           mkdir -p vt_results
           if [ -d artifact/dist ]; then
+            FAIL=0
             for f in artifact/dist/*; do
               fname=$(basename "$f")
               echo "--- Verifying $fname ---" >> vt_results/verify_summary.txt
               # Use PowerShell helper to verify checksums and optionally query VT
-              pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -ArtifactPath "$f" -Checksums artifact/dist/checksums.txt -VtKey "$VTKEY" >> vt_results/verify_summary.txt 2>&1 || true
+              pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -ArtifactPath "$f" -Checksums artifact/dist/checksums.txt -VtKey "$VTKEY" > vt_results/verify_$fname.txt 2>&1
+              rc=$?
+              cat vt_results/verify_$fname.txt >> vt_results/verify_summary.txt
+              # if strict mode is enabled, fail on checksum mismatch or VT detection
+              if [ "${STRICT,,}" = "true" ] || [ "$STRICT" = "1" ]; then
+                if [ $rc -ne 0 ]; then
+                  echo "Checksum verification failed for $fname (rc=$rc)" >> vt_results/verify_summary.txt
+                  FAIL=1
+                fi
+                # scan vt results for malicious/suspicious numbers
+                vtline=$(grep -E "VirusTotal analysis: malicious=[0-9]+ suspicious=[0-9]+" vt_results/verify_$fname.txt || true)
+                if [ -n "$vtline" ]; then
+                  mal=$(echo "$vtline" | sed -n 's/.*malicious=\([0-9]*\).*/\1/p')
+                  susp=$(echo "$vtline" | sed -n 's/.*suspicious=\([0-9]*\).*/\1/p')
+                  if [ "$mal" -gt 0 ] || [ "$susp" -gt 0 ]; then
+                    echo "VirusTotal reported suspicious/malicious detections for $fname: malicious=$mal suspicious=$susp" >> vt_results/verify_summary.txt
+                    FAIL=1
+                  fi
+                fi
+              fi
             done
             # attach verify_summary to release for convenience
             RELEASE_ID=${{ steps.create_release.outputs.result }}
@@ -148,6 +169,47 @@ jobs:
               echo "Attaching vt_results/verify_summary.txt to release $RELEASE_ID"
               curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" --data-binary @vt_results/verify_summary.txt "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=vt_verify_summary.txt"
             fi
+            if [ "$FAIL" = "1" ]; then
+              echo "Strict verification failed — aborting release (STRICT=$STRICT)"
+              exit 1
+            fi
           else
             echo "No artifacts found to verify"
           fi
+      - name: Add checksums and verification summary to release body
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.create_release.outputs.result }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs')
+            const artifactDir = 'artifact/dist'
+            let bodySections = []
+            // append checksums if present
+            const checksPath = `${artifactDir}/checksums.txt`
+            if (fs.existsSync(checksPath)) {
+              const checks = fs.readFileSync(checksPath, 'utf8')
+              bodySections.push('### Checksums\n```\n' + checks + '\n```')
+            }
+            // append vt scan summary if present
+            const scanPath = 'vt_results/scan_summary.txt'
+            if (fs.existsSync(scanPath)) {
+              const s = fs.readFileSync(scanPath, 'utf8')
+              bodySections.push('### VirusTotal scan (automated)\n```\n' + s + '\n```')
+            }
+            const verifyPath = 'vt_results/verify_summary.txt'
+            if (fs.existsSync(verifyPath)) {
+              const v = fs.readFileSync(verifyPath, 'utf8')
+              bodySections.push('### Verification summary\n```\n' + v + '\n```')
+            }
+            const releaseId = parseInt(process.env.RELEASE_ID, 10)
+            // Read existing release body
+            const owner = context.repo.owner
+            const repo = context.repo.repo
+            const rel = await github.rest.repos.getRelease({ owner, repo, release_id: releaseId })
+            let body = rel.data.body || ''
+            if (bodySections.length > 0) {
+              body += '\n\n' + bodySections.join('\n\n')
+              await github.rest.repos.updateRelease({ owner, repo, release_id: releaseId, body })
+            }
