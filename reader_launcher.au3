@@ -10,7 +10,7 @@
 #cs ----------------------------------------------------------------------------
 
  AutoIt Version: 3.3.14.3
- Author:         Eduardo Mota
+ Author:         Mariana
 
  Script Function:
 	Simple Adobe Reader Launcher
