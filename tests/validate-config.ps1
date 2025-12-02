@@ -12,7 +12,14 @@ if ($IniPath) {
     $iniFile = Resolve-Path -Path $IniPath -ErrorAction SilentlyContinue
 }
 else {
-    $iniFile = Join-Path $here "..\launcher.ini" | Resolve-Path -ErrorAction SilentlyContinue
+    # Prefer a real runtime config (launcher.ini) when present; otherwise validate the example file we distribute.
+    $iniReal = Join-Path $here "..\launcher.ini"
+    if (Test-Path $iniReal) {
+        $iniFile = Resolve-Path -Path $iniReal -ErrorAction SilentlyContinue
+    }
+    else {
+        $iniFile = Join-Path $here "..\launcher.example.ini" | Resolve-Path -ErrorAction SilentlyContinue
+    }
 }
 
 if (-not $iniFile) {

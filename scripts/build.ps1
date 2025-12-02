@@ -8,6 +8,8 @@ $src = Join-Path $here "..\src\reader_launcher.au3" | Resolve-Path -ErrorAction 
 $outDir = Join-Path $here "..\dist"
 If (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }
 $out = Join-Path $outDir "reader_launcher.exe"
+$out_upx = Join-Path $outDir "reader_launcher-upx.exe"
+$zipName = Join-Path $outDir "reader_launcher_package.zip"
 
 $aut2exe = Get-Command Aut2Exe -ErrorAction SilentlyContinue
 If (-not $aut2exe) {
@@ -22,4 +24,32 @@ If (-not $aut2exe) {
 
 Write-Host "Compiling $src -> $out"
 & $aut2exe.Path /in $src /out $out
-Exit $LASTEXITCODE
+if ($LASTEXITCODE -ne 0) { Write-Error "Aut2Exe compilation failed"; Exit $LASTEXITCODE }
+
+Write-Host "Creating UPX-compressed copy $out_upx (if upx available)"
+Copy-Item -Path $out -Destination $out_upx -Force
+$upx = Get-Command upx -ErrorAction SilentlyContinue
+if (-not $upx) {
+  $possibleUpx = "C:\Program Files\upx\upx.exe"
+  if (Test-Path $possibleUpx) { $upx = $possibleUpx }
+}
+if ($upx) {
+  & $upx $out_upx -9
+  if ($LASTEXITCODE -ne 0) { Write-Warning "UPX compression failed or returned non-zero code" }
+} else {
+  Write-Host "UPX not found on PATH; UPX-compressed binary will be identical to the non-UPX copy." -ForegroundColor Yellow
+}
+
+Write-Host "Creating distribution package (zip) containing reader_launcher.exe and example config"
+if (-not (Test-Path (Join-Path $here "..\launcher.example.ini"))) {
+  Write-Warning "launcher.example.ini not found; zip package will not include example config"
+} else {
+  $tmpFiles = @()
+  $tmpFiles += $out
+  $tmpFiles += (Join-Path $here "..\launcher.example.ini")
+  if (Test-Path $zipName) { Remove-Item $zipName -Force }
+  Compress-Archive -Path $tmpFiles -DestinationPath $zipName -Force
+}
+
+Write-Host "Build output placed in: $outDir"
+Exit 0

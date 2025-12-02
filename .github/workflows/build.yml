@@ -1,0 +1,30 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install AutoIt via Chocolatey
+        run: choco install autoit -y
+
+      - name: Install UPX via Chocolatey
+        run: choco install upx -y
+
+      - name: Run build script
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\build.ps1
+
+      - name: Run AutoIt unit tests
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests\unit\run-unit-tests.ps1
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reader-launcher-dist
+          path: dist

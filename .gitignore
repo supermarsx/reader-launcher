@@ -1,1 +1,8 @@
+\n+/tests/tmp
+
+# build output
+dist/
+
+# runtime logs
+logs/
 /tests/tmp

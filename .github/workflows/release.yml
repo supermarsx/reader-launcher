@@ -1,0 +1,81 @@
+name: Auto-release
+
+on:
+  workflow_run:
+    workflows: ["Build"]
+    types:
+      - completed
+
+jobs:
+  publish-release:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compute next release tag and create release
+        id: create_release
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const runId = context.payload.workflow_run.id
+            const owner = context.repo.owner
+            const repo = context.repo.repo
+
+            // derive two-digit year
+            const fullYear = new Date().getFullYear()
+            const yy = String(fullYear).slice(-2)
+
+            // list existing releases and find the highest numbered release for this year
+            const releases = await github.rest.repos.listReleases({ owner, repo })
+            let max = 0
+            for (const r of releases.data) {
+              const m = r.tag_name.match(new RegExp('^' + yy + '\\.(\\d+)$'))
+              if (m) {
+                const v = parseInt(m[1], 10)
+                if (v > max) max = v
+              }
+            }
+            const next = max + 1
+            const tag = `${yy}.${next}`
+            core.info(`Creating release ${tag}`)
+            const rel = await github.rest.repos.createRelease({ owner, repo, tag_name: tag, name: tag, body: `Automated release ${tag}`, draft: false, prerelease: false })
+            // export numeric release id for subsequent steps
+            return rel.data.id
+
+      - name: Download artifacts from successful Build run
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Fetching artifacts for run $RUN_ID"
+          API="https://api.github.com/repos/${{ github.repository }}/actions/runs/$RUN_ID/artifacts"
+          curl -s -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" "$API" > artifacts.json
+          cat artifacts.json
+          # find the artifact named reader-launcher-dist
+          ART_URL=$(jq -r '.artifacts[] | select(.name=="reader-launcher-dist") | .archive_download_url' artifacts.json)
+          if [ "$ART_URL" = "" ] || [ "$ART_URL" = "null" ]; then
+            echo "No reader-launcher-dist artifact found for build run: $RUN_ID"
+            exit 1
+          fi
+          echo "Found artifact: $ART_URL"
+          curl -L -H "Authorization: Bearer $TOKEN" -o artifact.zip "$ART_URL"
+          unzip -o artifact.zip -d artifact
+
+      - name: Attach build artifacts to release
+        env:
+          RELEASE_ID: ${{ steps.create_release.outputs.result }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Attaching artifacts to release id $RELEASE_ID"
+          REPO="${{ github.repository }}"
+          # upload any files found under artifact/dist
+          ls artifact
+          if [ -d artifact/dist ]; then
+            for f in artifact/dist/*; do
+              fname=$(basename "$f")
+              echo "Uploading $fname to release $RELEASE_ID"
+              curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" --data-binary @"$f" "https://uploads.github.com/repos/$REPO/releases/$RELEASE_ID/assets?name=$fname"
+            done
+          else
+            echo "No artifact/dist found to upload"
+            exit 1
+          fi

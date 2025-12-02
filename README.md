@@ -4,6 +4,8 @@ A tiny, focused Adobe Reader launcher written in AutoIt. The launcher reads a sm
 
 Project layout: source code now lives in `src/` and application assets (icons/images) live in `assets/`.
 
+If there is no `launcher.ini` present, the launcher will use built-in defaults and automatically enable autodiscovery to try and find a suitable PDF viewer. Create `launcher.ini` by copying `launcher.example.ini` and editing values for your machine when you want persistent configuration.
+
 This project is intentionally small — it helps automate launching Reader in circumstances where you want a short delay and optional debug options.
 
 ## Features
@@ -17,7 +19,7 @@ This project is intentionally small — it helps automate launching Reader in ci
 
 ## Usage
 
-1. Configure `launcher.ini` in the same directory as the executable/script.
+1. Configure `launcher.ini` in the same directory as the executable/script. A fully-documented example `launcher.example.ini` is included in the repository — copy it to `launcher.ini` and edit values for your machine.
 2. Run `reader_launcher.au3` (or the compiled `reader_launcher.exe`) and pass file(s) or other parameters as usual; parameters are forwarded to the target executable.
 
 Example:
@@ -70,6 +72,10 @@ execpath=C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe
 ```
 
 Note: The launcher accepts both `sleeprand` and historic key `sleeprandom` in case older versions of the file are present — both are supported.
+
+### ⚠️ Note about compiled AutoIt binaries and anti-virus false positives
+
+AutoIt binaries (and other small compiled utilities) can sometimes be flagged as false positives by anti-malware scanners because of the way AutoIt compiles scripts. This project is small and safe — if you create a compiled executable and your AV flags it, consider uploading the binary to a trusted scanner (VirusTotal) and/or adding an exception in your environment. When publishing releases we include both UPX-compressed and non-UPX binaries to make it easier to compare and reduce false positives (some scanners are more triggered by UPX-packed exes).
 
 ## Scripts (lint / format / test / build)
 

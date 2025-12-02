@@ -5,7 +5,7 @@
 Write-Host "Running tests..." -ForegroundColor Cyan
 
 $requiredTests = @("tests\validate-config.ps1", "tests\validate-config-cases.ps1")
-$optionalTests = @("tests\autodiscovery-test.ps1")
+$optionalTests = @("tests\autodiscovery-test.ps1", "tests\unit\run-unit-tests.ps1")
 $failed = @()
 
 foreach ($t in $requiredTests) {

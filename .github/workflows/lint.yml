@@ -1,0 +1,15 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run lint script (PowerShell)
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\lint.ps1

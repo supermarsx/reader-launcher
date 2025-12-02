@@ -39,7 +39,7 @@
 
 ; Global Configurations
 Global $cfg_filename = @ScriptDir & "\..\launcher.ini", _
-	$cfg_section1 = "general"
+		$cfg_section1 = "general"
 
 ; -------------------------------
 ; Configuration loading & normalization
@@ -104,6 +104,13 @@ If $cfg_sleepmax < $cfg_sleepmin Then $cfg_sleepmax = $cfg_sleepmin + 1000
 ; Determine the actual sleep time to use (randomized range or fixed)
 Local $ex_sleep = $cfg_sleeprand > 0 ? Random($cfg_sleepmin, $cfg_sleepmax, 1) : $cfg_sleep
 
+; If no config file exists, enable autodiscovery by default and use defaults.
+If Not FileExists($cfg_filename) Then
+	; prefer autodiscover when there is no user-configured launcher.ini
+	$cfg_autodiscover = 1
+	_WriteLog("info", "Config file not found at " & $cfg_filename & "; enabling autodiscovery and using defaults.")
+EndIf
+
 ; Debug info (pop-up when debug=1 and also forwarded to log when enabled)
 Local $dbg_message = "Sleep time: " & $ex_sleep & " ms" & @CRLF & "Randomize sleep: " & $cfg_sleeprand
 debug($dbg_message)
@@ -126,8 +133,8 @@ ParseCmdLineArgs()
 ; Initialize logging: create parent dir (if required) and write an initial
 ; log entry. Logging is off by default and must be enabled explicitly.
 If $cfg_logenabled = 1 Then
-    _EnsureLogDirExists($cfg_logfile)
-    Log("info", "Log initialized, level=" & $cfg_loglevel & " file=" & $cfg_logfile)
+	_EnsureLogDirExists($cfg_logfile)
+	_WriteLog("info", "Log initialized, level=" & $cfg_loglevel & " file=" & $cfg_logfile)
 EndIf
 
 ; Autodiscovery: if enabled, loop through configured sources and attempt to
@@ -139,213 +146,220 @@ EndIf
 ; which is expected — the behavior is conservative and informative.
 ; Autodiscover (if enabled)
 If $cfg_autodiscover = 1 Then
-    Local $found = AutoDiscoverExecPath($cfg_autodiscover_sources)
-    If StringLen($found) Then
-        Log("info", "Auto-discovered exec path: " & $found)
-        If $cfg_autodiscover_persist = 1 Then
-            IniWrite($cfg_filename, $cfg_section1, "execpath", $found)
-            Log("info", "Persisted discovered path to INI: " & $found)
-            $cfg_execpath = $found
-        Else
-            $cfg_execpath = $found
-        EndIf
-    Else
-        Log("warn", "Autodiscover enabled but no candidate found")
-    EndIf
+	Local $found = AutoDiscoverExecPath($cfg_autodiscover_sources)
+	If StringLen($found) Then
+		_WriteLog("info", "Auto-discovered exec path: " & $found)
+		If $cfg_autodiscover_persist = 1 Then
+			IniWrite($cfg_filename, $cfg_section1, "execpath", $found)
+			_WriteLog("info", "Persisted discovered path to INI: " & $found)
+			$cfg_execpath = $found
+		Else
+			$cfg_execpath = $found
+		EndIf
+	Else
+		_WriteLog("warn", "Autodiscover enabled but no candidate found")
+	EndIf
 EndIf
 
 ; Verify executable exists before attempting to execute unless debugnoexec set
 If ($cfg_debugnoexec = 0) Then
-    If StringLen($cfg_execpath) = 0 Then
-        Log("error", "No executable path configured in " & $cfg_filename)
-        MsgBox(16, "Launcher error", "No executable path configured in " & $cfg_filename)
-        Exit 1
-    EndIf
+	If StringLen($cfg_execpath) = 0 Then
+		_WriteLog("error", "No executable path configured in " & $cfg_filename)
+		MsgBox(16, "Launcher error", "No executable path configured in " & $cfg_filename)
+		Exit 1
+	EndIf
 
-    If Not FileExists($cfg_execpath) Then
-        Log("warn", "Configured execpath does not point to an existing file: " & $cfg_execpath)
-        MsgBox(48, "Launcher warning", "Configured execpath does not point to an existing file:" & @CRLF & $cfg_execpath)
-        ; still proceed to attempt execution — ShellExecute / Run may still attempt
-    EndIf
+	If Not FileExists($cfg_execpath) Then
+		_WriteLog("warn", "Configured execpath does not point to an existing file: " & $cfg_execpath)
+		MsgBox(48, "Launcher warning", "Configured execpath does not point to an existing file:" & @CRLF & $cfg_execpath)
+		; still proceed to attempt execution — ShellExecute / Run may still attempt
+	EndIf
 
-    ; Invoke the configured execution style (ShellExecute default)
-    Local $rc = ExecLaunch($cfg_execpath, $ex_parameters, $cfg_execstyle)
-    Log("info", "Executed with style=" & $cfg_execstyle & " rc=" & $rc)
+	; Invoke the configured execution style (ShellExecute default)
+	Local $rc = ExecLaunch($cfg_execpath, $ex_parameters, $cfg_execstyle)
+	_WriteLog("info", "Executed with style=" & $cfg_execstyle & " rc=" & $rc)
 EndIf
 
 Exit
 
 ; Displays a Debug message (pop-up when debug=1)
 Func debug($message)
-    ; existing pop-up style debug for compatibility
-    If ($cfg_debug = 1) Then MsgBox(0, "Debug Message", $message)
-    ; also write debug messages to log if enabled and loglevel >= debug
-    Log("debug", $message)
-EndFunc
+	; existing pop-up style debug for compatibility
+	If ($cfg_debug = 1) Then MsgBox(0, "Debug Message", $message)
+	; also write debug messages to log if enabled and loglevel >= debug
+	_WriteLog("debug", $message)
+EndFunc   ;==>debug
 
 ; ---------------- helper utilities ----------------
 ; _EnsureLogDirExists(path) — ensure the folder for the given file path exists.
 ; Extracts the directory component and creates it if it does not exist.
 Func _EnsureLogDirExists($path)
-    Local $dir = StringTrimRight($path, StringInStr($path, '\\', 0, -1) - 1)
-    If Not FileExists($dir) Then DirCreate($dir)
-EndFunc
+	Local $dir = StringTrimRight($path, StringInStr($path, '\\', 0, -1) - 1)
+	If Not FileExists($dir) Then DirCreate($dir)
+EndFunc   ;==>_EnsureLogDirExists
 
 ; Log(level, message) — write timestamped messages to the log file.
 ; The function respects cfg_logenabled and cfg_loglevel and honors append/overwrite.
-Func Log($level, $message)
-    If $cfg_logenabled <> 1 Then Return
-    Local $map = MapLevel($level)
-    If $map > $cfg_loglevel Then Return
-    Local $time = @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC
-    Local $line = $time & " [" & $level & "] " & $message & @CRLF
-    ; Choose file mode: 1 = append, 2 = overwrite
-    Local $mode = ($cfg_logappend = 1) ? 1 : 2
-    Local $h = FileOpen($cfg_logfile, $mode)
-    If $h = -1 Then Return
-    FileWrite($h, $line)
-    FileClose($h)
-EndFunc
+; _WriteLog(level, message) — write timestamped messages to the log file.
+Func _WriteLog($level, $message)
+	If $cfg_logenabled <> 1 Then Return
+	Local $map = MapLevel($level)
+	If $map > $cfg_loglevel Then Return
+	Local $time = @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC
+	Local $line = $time & " [" & $level & "] " & $message & @CRLF
+	; Choose file mode: 1 = append, 2 = overwrite
+	Local $mode = ($cfg_logappend = 1) ? 1 : 2
+	Local $h = FileOpen($cfg_logfile, $mode)
+	If $h = -1 Then Return
+	FileWrite($h, $line)
+	FileClose($h)
+EndFunc   ;==>Log
 
 ; MapLevel(name) — convert a string level into an integer priority
 ; Lower numbers map to more severe events (error=1..debug=4)
 Func MapLevel($name)
-    Select
-        Case StringLower($name) = "error"
-            Return 1
-        Case StringLower($name) = "warn" Or StringLower($name) = "warning"
-            Return 2
-        Case StringLower($name) = "info"
-            Return 3
-        Case StringLower($name) = "debug"
-            Return 4
-        Case Else
-            Return 0
-    EndSelect
-EndFunc
+	Select
+		Case StringLower($name) = "error"
+			Return 1
+		Case StringLower($name) = "warn" Or StringLower($name) = "warning"
+			Return 2
+		Case StringLower($name) = "info"
+			Return 3
+		Case StringLower($name) = "debug"
+			Return 4
+		Case Else
+			Return 0
+	EndSelect
+EndFunc   ;==>MapLevel
 
 ; ExecLaunch — run executables in various styles
 ; Returns the PID for Run/RunWait or 0 for ShellExecute (successful) and
 ; passes through RunWait return code when using runwait.
 Func ExecLaunch($path, $params, $style)
-    Local $full = '"' & $path & '"'
-    If StringLen($params) Then $full &= ' ' & $params
-    Select
-        Case $style = "shellexecute" Or $style = "shell"
-            ShellExecute($path, $params)
-            Return 0
-        Case $style = "run"
-            Local $pid = Run($full, "", @SW_SHOW)
-            Return $pid
-        Case $style = "runwait"
-            Local $rc = RunWait($full, "", @SW_SHOW)
-            Return $rc
-        Case $style = "cmd" Or $style = "cmdline"
-            ; Start via cmd /c so parameters are handled consistently
-            Local $cmd = 'cmd /c start "" "' & $path & '" ' & $params
-            Local $pid2 = Run($cmd, "", @SW_HIDE)
-            Return $pid2
-        Case Else
-            ; fallback to ShellExecute
-            ShellExecute($path, $params)
-            Return 0
-    EndSelect
-EndFunc
+	; Safely quote/prepare the path and parameters for each execution style.
+	; We avoid double-quoting when the caller already included quotes.
+	Local $quotedPath = $path
+	If StringLeft($quotedPath, 1) <> '"' Then $quotedPath = '"' & $quotedPath & '"'
+	Local $full = $quotedPath
+	If StringLen($params) Then
+		; ensure a single leading space between path and params
+		$full &= ' ' & $params
+	EndIf
+	Select
+		Case $style = "shellexecute" Or $style = "shell"
+			; ShellExecute expects raw path and params separately (no additional quoting required)
+			ShellExecute($path, $params)
+			Return 0
+		Case $style = "run"
+			Local $pid = Run($full, "", @SW_SHOW)
+			Return $pid
+		Case $style = "runwait"
+			Local $rc = RunWait($full, "", @SW_SHOW)
+			Return $rc
+		Case $style = "cmd" Or $style = "cmdline"
+			; Start via cmd /c so parameters are handled consistently
+			Local $cmd = 'cmd /c start "" "' & $path & '" ' & $params
+			Local $pid2 = Run($cmd, "", @SW_HIDE)
+			Return $pid2
+		Case Else
+			; fallback to ShellExecute
+			ShellExecute($path, $params)
+			Return 0
+	EndSelect
+EndFunc   ;==>ExecLaunch
 
 ; Parse command-line overrides (very simple parser)
 ; Supported forms include: --key=value, /key:value, key=value or /key
 Func ParseCmdLineArgs()
-    If $CmdLineCount = 0 Then Return
-    For $i = 0 To $CmdLineCount - 1
-        Local $arg = $CmdLine[$i]
-        Local $lower = StringLower($arg)
-        ; support key=value or /key:value or --key=value
-        Local $name = "", $val = ""
-        If StringInStr($arg, "=") Then
-            $name = StringLeft($arg, StringInStr($arg, "=") - 1)
-            $val = StringMid($arg, StringInStr($arg, "=") + 1)
-        ElseIf StringInStr($arg, ":") Then
-            $name = StringLeft($arg, StringInStr($arg, ":") - 1)
-            $val = StringMid($arg, StringInStr($arg, ":") + 1)
-        Else
-            $name = $arg
-            $val = "1"
-        EndIf
+	If $CmdLineCount = 0 Then Return
+	For $i = 0 To $CmdLineCount - 1
+		Local $arg = $CmdLine[$i]
+		Local $lower = StringLower($arg)
+		; support key=value or /key:value or --key=value
+		Local $name = "", $val = ""
+		If StringInStr($arg, "=") Then
+			$name = StringLeft($arg, StringInStr($arg, "=") - 1)
+			$val = StringMid($arg, StringInStr($arg, "=") + 1)
+		ElseIf StringInStr($arg, ":") Then
+			$name = StringLeft($arg, StringInStr($arg, ":") - 1)
+			$val = StringMid($arg, StringInStr($arg, ":") + 1)
+		Else
+			$name = $arg
+			$val = "1"
+		EndIf
 
-        $name = StringStripWS(StringReplace(StringLower($name), "--", ""), 3)
-        $name = StringReplace($name, "/", "")
+		$name = StringStripWS(StringReplace(StringLower($name), "--", ""), 3)
+		$name = StringReplace($name, "/", "")
 
-        Switch $name
-            Case "debug"
-                $cfg_debug = Int($val)
-            Case "debugnosleep"
-                $cfg_debugnosleep = Int($val)
-            Case "debugnoexec"
-                $cfg_debugnoexec = Int($val)
-            Case "logenabled"
-                $cfg_logenabled = Int($val)
-            Case "logfile"
-                $cfg_logfile = StringStripWS(StringReplace($val, '"', ''), 3)
-            Case "logappend"
-                $cfg_logappend = Int($val)
-            Case "loglevel"
-                $cfg_loglevel = Int($val)
-            Case "execstyle"
-                $cfg_execstyle = StringLower($val)
-            Case "autodiscover"
-                $cfg_autodiscover = Int($val)
-            Case "autodiscover_persist", "autodiscoverpersist"
-                $cfg_autodiscover_persist = Int($val)
-            Case Else
-                ; unknown param — leave as file argument
-        EndSwitch
-    Next
-EndFunc
+		Switch $name
+			Case "debug"
+				$cfg_debug = Int($val)
+			Case "debugnosleep"
+				$cfg_debugnosleep = Int($val)
+			Case "debugnoexec"
+				$cfg_debugnoexec = Int($val)
+			Case "logenabled"
+				$cfg_logenabled = Int($val)
+			Case "logfile"
+				$cfg_logfile = StringStripWS(StringReplace($val, '"', ''), 3)
+			Case "logappend"
+				$cfg_logappend = Int($val)
+			Case "loglevel"
+				$cfg_loglevel = Int($val)
+			Case "execstyle"
+				$cfg_execstyle = StringLower($val)
+			Case "autodiscover"
+				$cfg_autodiscover = Int($val)
+			Case "autodiscover_persist", "autodiscoverpersist"
+				$cfg_autodiscover_persist = Int($val)
+			Case Else
+				; unknown param — leave as file argument
+		EndSwitch
+	Next
+EndFunc   ;==>ParseCmdLineArgs
 
 ; Auto-discovery helper — check registry and common Program Files locations
 Func AutoDiscoverExecPath(ByRef $sources)
-    ; sources is an array from StringSplit earlier
-    For $s = 1 To $sources[0]
-        Local $src = StringLower(StringStripWS($sources[$s], 3))
-        Switch $src
-            Case "registry"
-                ; check App Paths for AcroRd32.exe
-                Local $keys[2] = [
-                    "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\AcroRd32.exe", _
-                    "HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\App Paths\AcroRd32.exe"
-                ]
-                For $k = 0 To UBound($keys) - 1
-                    Local $r = ""
-                    OnErrorResumeNext
-                    $r = RegRead($keys[$k], "")
-                    If @error = 0 And StringLen($r) Then
-                        If FileExists($r) Then Return $r
-                    EndIf
-                    OnErrorGoTo0
-                Next
-            Case "programfiles", "programfilesx86", "programfilesx64"
-                ; check common locations — order: Program Files (x86) and Program Files
-                Local $candidates[6] = [ _
-                    @ProgramFilesDir & "\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe", _
-                    @ProgramFilesDir & "\Adobe\Acrobat\Acrobat.exe", _
-                    @ProgramFilesDir & "\SumatraPDF\SumatraPDF.exe", _
-                    @ProgramFilesDir & "(x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe", _
-                    @ProgramFilesDir & "(x86)\Adobe\Acrobat\Acrobat.exe", _
-                    @ProgramFilesDir & "(x86)\SumatraPDF\SumatraPDF.exe" _
-                ]
-                For $c = 0 To UBound($candidates) - 1
-                    Local $path = $candidates[$c]
-                    ; attempt to normalize odd strings like (x86) — perform two common expands
-                    $path = StringReplace($path, "(x86)", "Program Files (x86)")
-                    If FileExists($path) Then Return $path
-                Next
-            Case "cwd", "currentdir"
-                ; check the same dir as the script
-                Local $cand = @ScriptDir & "\AcroRd32.exe"
-                If FileExists($cand) Then Return $cand
-            Case Else
-                ; unknown source
-        EndSwitch
-    Next
-    Return ""
-EndFunc
+	; sources is an array from StringSplit earlier
+	For $s = 1 To $sources[0]
+		Local $src = StringLower(StringStripWS($sources[$s], 3))
+		Switch $src
+			Case "registry"
+				; check App Paths for AcroRd32.exe
+				Local $keys[2] = [
+				"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\AcroRd32.exe", _
+						"HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\App Paths\AcroRd32.exe"
+				]
+				For $k = 0 To UBound($keys) - 1
+					Local $r = RegRead($keys[$k], "")
+					; RegRead sets @error when the key is not present — guard on that.
+					If @error = 0 And StringLen($r) Then
+						If FileExists($r) Then Return $r
+					EndIf
+				Next
+			Case "programfiles", "programfilesx86", "programfilesx64"
+				; check common locations — order: Program Files (x86) and Program Files
+				Local $candidates[6] = [ _
+						@ProgramFilesDir & "\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe", _
+						@ProgramFilesDir & "\Adobe\Acrobat\Acrobat.exe", _
+						@ProgramFilesDir & "\SumatraPDF\SumatraPDF.exe", _
+						@ProgramFilesDir & "(x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe", _
+						@ProgramFilesDir & "(x86)\Adobe\Acrobat\Acrobat.exe", _
+						@ProgramFilesDir & "(x86)\SumatraPDF\SumatraPDF.exe" _
+						]
+				For $c = 0 To UBound($candidates) - 1
+					Local $path = $candidates[$c]
+					; attempt to normalize odd strings like (x86) — perform two common expands
+					$path = StringReplace($path, "(x86)", "Program Files (x86)")
+					If FileExists($path) Then Return $path
+				Next
+			Case "cwd", "currentdir"
+				; check the same dir as the script
+				Local $cand = @ScriptDir & "\AcroRd32.exe"
+				If FileExists($cand) Then Return $cand
+			Case Else
+				; unknown source
+		EndSwitch
+	Next
+	Return ""
+EndFunc   ;==>AutoDiscoverExecPath

@@ -18,3 +18,4 @@ All notable changes to this project will be documented in this file.
 - Move: source file moved to `src/` and assets moved to `assets/` (updated paths and scripts accordingly)
 - Add: tests for config cases (`tests/validate-config-cases.ps1`) and mark autodiscovery-test optional
 - Add: GitHub Actions CI (`.github/workflows/ci.yml`) — lint, tests, build on Windows
+- Replace: split CI into separate workflows (lint, format, test, build) and a follow-up autorelease workflow

@@ -1,0 +1,15 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\test.ps1
