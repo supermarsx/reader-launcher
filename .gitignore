@@ -1,8 +1,9 @@
-\n+/tests/tmp
-
 # build output
 dist/
 
 # runtime logs
 logs/
+
+# temporary files
 /tests/tmp
+temp_*.au3

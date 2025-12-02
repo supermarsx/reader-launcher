@@ -79,9 +79,18 @@ execpath=C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe
 
 Note: The launcher accepts both `sleeprand` and historic key `sleeprandom` in case older versions of the file are present — both are supported.
 
-### ⚠️ Note about compiled AutoIt binaries and anti-virus false positives
+### ⚠️ Note about compiled AutoIt binaries, release artifacts and anti‑virus checks
 
-AutoIt binaries (and other small compiled utilities) can sometimes be flagged as false positives by anti-malware scanners because of the way AutoIt compiles scripts. This project is small and safe — if you create a compiled executable and your AV flags it, consider uploading the binary to a trusted scanner (VirusTotal) and/or adding an exception in your environment. When publishing releases we include both UPX-compressed and non-UPX binaries to make it easier to compare and reduce false positives (some scanners are more triggered by UPX-packed exes).
+AutoIt binaries (and other small compiled utilities) can sometimes be flagged as false positives by anti‑malware scanners because of the way AutoIt packs and compiles scripts. This project is small and safe — if a compiled executable is flagged, upload the binary to a trusted scanner (like VirusTotal) and/or add an exception in your environment.
+
+When we publish releases the build workflow produces multiple artifacts and metadata to assist with verification and diagnosing AV detection:
+
+- A non-UPX compiled binary `reader_launcher.exe` (unpacked)
+- An UPX-compressed binary `reader_launcher-upx.exe` (when UPX is available on the build runner)
+- A zip package containing `reader_launcher.exe` and `launcher.example.ini` (ready for download and testing)
+- A `checksums.txt` file in the `dist/` artifacts folder containing SHA256 and SHA512 hashes for every artifact (useful to verify downloads and to cross-check on scanners like VirusTotal)
+
+Additionally, the release workflow will attempt an automated VirusTotal scan when a `VIRUSTOTAL_API_KEY` secret is provided to the CI. If an API key is not available the workflow will still include GUI detection links you can use to manually inspect each artifact on VirusTotal.
 
 ## Scripts (lint / format / test / build)
 
@@ -117,6 +126,39 @@ Windows runners and performs the following steps:
 
 CI workflows are split across `.github/workflows/` (lint.yml, format.yml, test.yml, build.yml, release.yml).
 
+### How to verify release artifacts locally (checksums and VirusTotal)
+
+When a release is produced the `dist/` folder contains compiled artifacts and a `checksums.txt` file with SHA256 and SHA512 hashes. You can verify an artifact you downloaded against the published checksums using PowerShell (Windows) or sha256sum/sha512sum on Unix-like systems.
+
+PowerShell example (verify SHA256):
+
+```powershell
+# compute file hash locally and compare to the published value
+Get-FileHash -Path .\reader_launcher.exe -Algorithm SHA256
+
+# or verify against checksums.txt
+(Get-Content checksums.txt) | Select-String -Pattern "reader_launcher.exe" -SimpleMatch
+```
+
+If you want to double-check the file on VirusTotal you can either use the `VIRUSTOTAL_API_KEY` in your CI to obtain a full automated scan summary, or visit the VirusTotal GUI web page and paste the SHA256 value (the release workflow also adds GUI links when an API key is not present).
+
+### Expected outcomes when running helper scripts locally
+
+- `scripts/lint.ps1` — runs `au3check` if present. If `au3check` is not installed the script exits successfully but prints a warning advising how to enable it.
+- `scripts/format.ps1` — will run `au3fix` if present, otherwise it is a safe no-op and warns that formatting was skipped.
+- `scripts/test.ps1` — runs required tests (`tests/validate-config.ps1`, `tests/validate-config-cases.ps1`) and optional tests (autodiscovery and unit tests). Optional tests are skipped gracefully when dependencies (like AutoIt runtime) are missing.
+- `scripts/build.ps1` — compiles the AutoIt script using `Aut2Exe` if present on the machine. If `Aut2Exe` is not available the script exits non-successfully so the build step can be retried on a machine or CI runner where AutoIt is installed. The build step also produces `checksums.txt` in `dist/` for verification.
+
+These helper scripts are intentionally forgiving so you can run the code and tests on developer machines without extra tooling installed; CI runners used by this project install AutoIt and UPX so they run all steps end-to-end.
+
+---
+
+If you'd like, I can also:
+
+- Add a short `verify-release.ps1` helper that takes a downloaded artifact and checks it against the release `checksums.txt` and optionally queries VirusTotal with an API key.
+- Include parsed VirusTotal scan summaries into the release body (currently the release workflow attaches a `vt_scan_summary.txt` file to the release).
+
+
 ## Diagnostic / Tests
 
 A small PowerShell validator is included in `tests/validate-config.ps1` to check the presence of configuration keys and validate the `execpath` value. See `tests/README.md` for how to run it.
@@ -125,6 +167,3 @@ A small PowerShell validator is included in `tests/validate-config.ps1` to check
 
 This repository is distributed under the terms described in `license.md`.
 
-The Build workflow compiles the exe (non-UPX and UPX variants) and uploads artifacts to `dist/`.
-Both a non-UPX `reader_launcher.exe` and a UPX-compressed `reader_launcher-upx.exe` are produced when UPX is available on the build runner. A zipped package containing `reader_launcher.exe` and `launcher.example.ini` is also generated so the release contains a ready-to-download package.
-pwsh -ExecutionPolicy Bypass -File scripts\lint.ps1

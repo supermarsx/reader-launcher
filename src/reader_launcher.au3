@@ -231,7 +231,7 @@ Func _WriteLog($level, $message)
 	If $h = -1 Then Return
 	FileWrite($h, $line)
 	FileClose($h)
-EndFunc   ;==>Log
+EndFunc   ;==>_WriteLog
 
 ; MapLevel(name) — convert a string level into an integer priority
 ; Lower numbers map to more severe events (error=1..debug=4)
@@ -390,7 +390,7 @@ Func DetermineDefaultPreset($path)
 	If StringInStr($lower, "sumatrapdf") Then Return ""
 	; Fallback: no preset
 	Return ""
-EndFunc
+EndFunc   ;==>DetermineDefaultPreset
 
 ; GetPresetParams(name) - return param string for known preset or from [presets] INI.
 Func GetPresetParams($name)
@@ -424,4 +424,4 @@ Func GetPresetParams($name)
 	Else
 		Return ""
 	EndIf
-EndFunc
+EndFunc   ;==>GetPresetParams

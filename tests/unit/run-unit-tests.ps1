@@ -38,7 +38,7 @@ if (-not ($content -match 'Log initialized')) {
 # Test 2 - extra_params are picked up and appear in the debug log
 $tmpLog2 = Join-Path $here "..\tmp\unit-test-params.log"
 If (Test-Path $tmpLog2) { Remove-Item $tmpLog2 -Force }
- $args2 = "/debugnoexec=1 /debugnosleep=1 /logenabled=1 /loglevel=4 /logfile=`"$tmpLog2`" /extra_params=/s ""C:\test.pdf"""
+$args2 = "/debugnoexec=1 /debugnosleep=1 /logenabled=1 /loglevel=4 /logfile=`"$tmpLog2`" /extra_params=/s ""C:\test.pdf"""
 & $autoit.Path $script.Path $args2
 Start-Sleep -Seconds 1
 if (-not (Test-Path $tmpLog2)) { Write-Error "Unit test failed: second log not created"; Exit 3 }
