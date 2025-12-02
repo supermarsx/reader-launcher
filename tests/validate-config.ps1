@@ -14,18 +14,18 @@ if (-not $iniFile) {
 $content = Get-Content $iniFile
 
 # find [general] block
-$start = $content | Select-String -Pattern '^[\[]general[\]]' -SimpleMatch | Select-Object -First 1
+$start = $content | Select-String -Pattern '^\[general\]' | Select-Object -First 1
 if (-not $start) {
     Write-Error "[general] section not found in $iniFile"
     exit 2
 }
 
 $idx = ($content | ForEach-Object { $_ }) -as [array]
-$i = ($idx | Select-String -Pattern '^[\[]general[\]]' -SimpleMatch).LineNumber
+$i0 = ($idx | Select-String -Pattern '^\[general\]').LineNumber - 1
 
-# collect lines until next section or EOF
+# collect lines until next section or EOF (start from the following line after [general])
 $values = @{}
-for ($j = $i; $j -lt $idx.Count; $j++) {
+for ($j = $i0 + 1; $j -lt $idx.Count; $j++) {
     $line = $idx[$j].Trim()
     if ($line -match '^\[') { break }
     if ($line -eq '' -or $line.StartsWith('#')) { continue }
@@ -39,7 +39,6 @@ for ($j = $i; $j -lt $idx.Count; $j++) {
 $errors = @()
 
 function assertNumber($name) {
-    param($name)
     if (-not $values.ContainsKey($name)) { $errors += "Missing key: $name"; return }
     [int]$tmp = 0
     if (-not [int]::TryParse($values[$name], [ref]$tmp)) { $errors += "Value for $name is not a number: $($values[$name])" }

@@ -9,6 +9,9 @@ This project is intentionally small — it helps automate launching Reader in ci
 - Configurable delay before launching (fixed or randomized range)
 - Configurable executable path (Acrobat Reader, SumatraPDF, etc.)
 - Debugging switches to skip sleep and/or skip executing the app
+- Logging to file with levels (error/warn/info/debug)
+- Multiple execution styles (ShellExecute — default, Run, RunWait, Cmd)
+- Autodiscovery for target executable (registry and Program Files lookup) with optional persistence back to configuration
 
 ## Usage
 
@@ -17,8 +20,16 @@ This project is intentionally small — it helps automate launching Reader in ci
 
 Example:
 
-```
+```powershell
 reader_launcher.exe "C:\path\to\some.pdf"
+```
+
+You can use extra command-line options to override config settings for the current run. Examples:
+
+```powershell
+reader_launcher.exe /autodiscover=1 /autodiscover_persist=1 /logenabled=1 /logfile="C:\temp\launcher.log" /execstyle=Run "C:\path\to\doc.pdf"
+
+reader_launcher.exe /debug=1 /debugnosleep=1 "C:\file.pdf"
 ```
 
 ## Configuration (launcher.ini)
@@ -33,6 +44,14 @@ The value file `launcher.ini` contains the [general] section with the following 
 - `debugnosleep` — When `1`, the script will skip sleeping (useful for testing). Default: `0`.
 - `debugnoexec` — When `1`, the script will skip actually starting the executable (useful for dry-runs). Default: `0`.
 - `execpath` — The full path of the executable to launch. If missing, the launcher will try to use `C:\` and will warn or refuse to launch if the path doesn't exist.
+- `execstyle` — How the target should be launched; supported values: `ShellExecute` (default), `Run`, `RunWait`, `Cmd`.
+- `logenabled` — When `1`, writes runtime logs to `logfile`. Default: `0`.
+- `logfile` — Path to the log file (if enabled). Default: `./logs/reader-launcher.log`.
+- `logappend` — When `1` append to existing logfile; when `0` overwrite. Default: `1`.
+- `loglevel` — 0=none,1=error,2=warn,3=info,4=debug. Default: `3`.
+- `autodiscover` — Enable automatic discovery of a candidate executable through registry and common folders. Default: `0`.
+- `autodiscover_sources` — Comma-separated discovery sources (e.g. `registry,programfiles`). Default: `registry,programfiles`.
+- `autodiscover_persist` — When `1`, persist discovered path back into `launcher.ini`. Default: `0`.
 
 Sample `launcher.ini`:
 
@@ -49,6 +68,23 @@ execpath=C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe
 ```
 
 Note: The launcher accepts both `sleeprand` and historic key `sleeprandom` in case older versions of the file are present — both are supported.
+
+## Scripts (lint / format / test / build)
+
+The `scripts/` folder contains helper scripts for common development tasks (PowerShell). They are small, self-checking helpers that run on Windows / PowerShell:
+
+- `scripts/lint.ps1` — run au3check (if installed) against `reader_launcher.au3`.
+- `scripts/format.ps1` — runs an AutoIt formatter (if present) or prints guidance.
+- `scripts/test.ps1` — runs tests under `tests/` (`validate-config.ps1`, `autodiscovery-test.ps1`).
+- `scripts/build.ps1` — attempt to compile `reader_launcher.au3` into `dist\reader_launcher.exe` using Aut2Exe if installed.
+
+Example quick checks (PowerShell):
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File scripts\lint.ps1
+pwsh -ExecutionPolicy Bypass -File scripts\test.ps1
+pwsh -ExecutionPolicy Bypass -File scripts\build.ps1
+```
 
 ## Development / Building
 
