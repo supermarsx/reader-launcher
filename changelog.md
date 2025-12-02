@@ -15,3 +15,6 @@ All notable changes to this project will be documented in this file.
 - Add execution styles (`execstyle`) — ShellExecute, Run, RunWait, Cmd
 - Add autodiscovery feature (disabled by default) and `autodiscover_sources`, `autodiscover_persist`
 - Add scripts for lint/format/test/build under `scripts/`
+- Move: source file moved to `src/` and assets moved to `assets/` (updated paths and scripts accordingly)
+- Add: tests for config cases (`tests/validate-config-cases.ps1`) and mark autodiscovery-test optional
+- Add: GitHub Actions CI (`.github/workflows/ci.yml`) — lint, tests, build on Windows

@@ -2,6 +2,8 @@
 
 A tiny, focused Adobe Reader launcher written in AutoIt. The launcher reads a small config file and starts the configured Acrobat/Reader executable with an optional randomized sleep delay and passthrough arguments.
 
+Project layout: source code now lives in `src/` and application assets (icons/images) live in `assets/`.
+
 This project is intentionally small — it helps automate launching Reader in circumstances where you want a short delay and optional debug options.
 
 ## Features
@@ -90,6 +92,18 @@ pwsh -ExecutionPolicy Bypass -File scripts\build.ps1
 
 - The AutoIt script is `reader_launcher.au3`. You can compile it using AutoIt3Wrapper (usually available from SciTE or the AutoIt tools).
 - Make sure `launcher.ini` is present beside the compiled exe when testing.
+
+### CI & contribution
+
+This repository includes a simple GitHub Actions workflow that runs on
+Windows runners and performs the following steps:
+
+- lint the source (when au3check is available)
+- run formatter if present (au3fix)
+- run the PowerShell tests (config validator and config-cases)
+- install AutoIt via Chocolatey and attempt a build (Aut2Exe)
+
+The workflow lives at `.github/workflows/ci.yml`.
 
 ## Diagnostic / Tests
 
