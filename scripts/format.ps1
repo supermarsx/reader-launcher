@@ -1,7 +1,23 @@
+$ErrorActionPreference = 'Stop'
+
 <#
   format.ps1
-  Try to format AutoIt code. There's no widely-used AutoIt formatter included, so this script
-  is a safe no-op that will notify if a plausible formatter is installed.
+
+  Purpose:
+    Try to format AutoIt code using a known formatting utility (`au3fix`) when
+    available. Because there is no single standard cross-platform AutoIt
+    formatter, this helper is intentionally conservative:
+
+    - If `au3fix` is in PATH it will be invoked to format the source file
+    - Otherwise the script is a no-op and prints guidance on how to enable
+      formatting locally.
+
+  Usage:
+    pwsh -ExecutionPolicy Bypass -File scripts\format.ps1
+
+  Notes:
+    - Formatting is optional and non-fatal for developers — CI can include
+      additional style checks if desired.
 #>
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $file = Join-Path $here "..\src\reader_launcher.au3" | Resolve-Path -ErrorAction Stop

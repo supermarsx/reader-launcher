@@ -1,7 +1,19 @@
 <#
-  autodiscovery-test.ps1
-  Check whether this machine has a discoverable PDF reader via registry or common folders.
-  The script returns 0 if at least one candidate was found.
+    autodiscovery-test.ps1
+
+    Purpose:
+        Inspect the local machine for likely PDF reader installations using both
+        App Paths registry keys and common Program Files locations. This test is
+        optional in the project's test harness because developer machines and CI
+        images may not include a PDF reader.
+
+    Usage:
+        pwsh -ExecutionPolicy Bypass -File tests\autodiscovery-test.ps1
+
+    Exit codes:
+        0 = at least one candidate discovered
+        1 = no candidates found
+
 #>
 
 $found = @()

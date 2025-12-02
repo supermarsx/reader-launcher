@@ -1,6 +1,33 @@
+$ErrorActionPreference = 'Stop'
 <#
-  build.ps1
-  Build (compile) the AutoIt script to an exe using Aut2Exe if available.
+    build.ps1
+
+    Purpose:
+        Compile the AutoIt source to a distributable EXE and create additional
+        artifacts useful for releases (UPX-compressed variant when available and
+        a zip package that includes the example config). The script also generates
+        checksums.txt (SHA256 + SHA512) to allow artifact verification.
+
+    Behavior & notes:
+        - The script looks for Aut2Exe on PATH and also checks the common
+            AutoIt install location. ``Aut2Exe`` may be returned as a CommandInfo
+            object (Get-Command) or as a plain path string; this script handles
+            both cases robustly.
+        - UPX compression is optional; if present the script creates an additional
+            UPX-compressed copy of the compiled EXE. If UPX is not found the script
+            copies the regular EXE to the UPX filename (so downstream releases still
+            have a matching name).
+        - The script produces a zip containing the non-UPX EXE and the
+            `launcher.example.ini` so users downloading the release have a ready-to-run
+            package.
+
+    Usage (local):
+        pwsh -ExecutionPolicy Bypass -File scripts\build.ps1
+
+    Exit codes:
+        0 = successful build & checksum generation
+        1 = fatal invocation error (Aut2Exe/UPX invocation failure or missing output)
+        2 = Aut2Exe not present
 #>
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path

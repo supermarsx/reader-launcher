@@ -85,14 +85,102 @@ if ($c4 -notmatch '/s') { Write-Error "Unit test failed: default preset '/s' not
 Remove-Item $projectRootIni -Force
 if (Test-Path $backupIni) { Move-Item $backupIni $projectRootIni -Force }
 
-Write-Host "All unit tests passed" -ForegroundColor Green
-Exit 0
+Write-Host "Core unit tests passed — continuing with extended coverage checks" -ForegroundColor Green
 
-# Optional Test 5 - if dist exists (build ran in CI) check checksums file
-if (Test-Path (Join-Path $here "..\..\dist\checksums.txt")) {
-    Write-Host "Found checksums file in dist — verifying entries"
-    $checks = Get-Content (Join-Path $here "..\..\dist\checksums.txt")
-    if ($checks -notmatch 'reader_launcher.exe') { Write-Error "checksums.txt missing reader_launcher.exe"; Exit 11 }
-    if ($checks -notmatch 'reader_launcher-upx.exe') { Write-Warning "checksums.txt may be missing upx variant — OK on systems without UPX" }
-    Write-Host "Checksums file verified (basic check)."
-}
+## ----------------------
+## EXTENDED UNIT TESTS
+## These tests increase coverage for runtime behavior that is convenient to test
+## when AutoIt is available on the machine (CI or developer machine with AutoIt).
+##
+## Test 5 -> logfile append / overwrite behavior
+## Test 6 -> sleeprand and legacy sleeprandom acceptance (logged)
+## Test 7 -> quoted execpath trimmed correctly and default preset detected
+## ----------------------
+
+# Test 5 - logfile append vs overwrite behaviour
+$tmpLog5 = Join-Path $here "..\tmp\unit-test-append.log"
+If (Test-Path $tmpLog5) { Remove-Item $tmpLog5 -Force }
+
+Write-Host "Running unit test: logfile append/overwrite behaviour"
+$args5a = @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4','/logfile=' + $tmpLog5,'/logappend=1')
+& $autoit.Path $script.Path $args5a
+Start-Sleep -Milliseconds 250
+& $autoit.Path $script.Path $args5a
+Start-Sleep -Milliseconds 250
+if (-not (Test-Path $tmpLog5)) { Write-Error "Unit test failed: append log not created"; Exit 12 }
+$lines = (Get-Content $tmpLog5 -ErrorAction SilentlyContinue | Where-Object { $_ -ne "" })
+if ($lines.Count -lt 2) { Write-Error "Unit test failed: expected appended log entries, found $($lines.Count)"; Exit 13 }
+
+# Now run with overwrite (logappend=0) and verify only a single fresh entry exists
+& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4','/logfile=' + $tmpLog5,'/logappend=0')
+Start-Sleep -Milliseconds 250
+$final = (Get-Content $tmpLog5 -ErrorAction SilentlyContinue | Where-Object { $_ -ne "" })
+if ($final.Count -ne 1) { Write-Error "Unit test failed: expected overwrite to produce single log entry, found $($final.Count)"; Exit 14 }
+
+# Test 6 - sleeprand and legacy key sleeprandom should be accepted and logged
+Write-Host "Running unit test: sleeprand/sleeprandom logging"
+$tmpLog6 = Join-Path $here "..\tmp\unit-test-sleeprand.log"
+If (Test-Path $tmpLog6) { Remove-Item $tmpLog6 -Force }
+
+# Use sleeprand=1 to check debug log contains Randomize sleep: 1
+$iniSrand = @"
+[general]
+sleepmin=200
+sleepmax=400
+sleeprand=1
+logenabled=1
+loglevel=4
+"@
+$iniFile = Join-Path $here "..\..\launcher.ini"
+$backupIni2 = ""
+if (Test-Path $iniFile) { $backupIni2 = Join-Path $here "..\tmp\launcher.ini.srand.bak"; Copy-Item $iniFile $backupIni2 -Force }
+$iniSrand | Out-File -FilePath $iniFile -Encoding ASCII
+
+& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4','/logfile=' + $tmpLog6)
+Start-Sleep -Milliseconds 250
+if (-not (Test-Path $tmpLog6)) { Write-Error "Unit test failed: sleeprand log not created"; Exit 15 }
+$c6 = Get-Content $tmpLog6 -ErrorAction SilentlyContinue
+if ($c6 -notmatch 'Randomize sleep: 1') { Write-Error "Unit test failed: Randomize sleep message not found (sleeprand)"; Exit 16 }
+
+# Now repeat using legacy sleeprandom key
+If (Test-Path $tmpLog6) { Remove-Item $tmpLog6 -Force }
+$iniSrand2 = @"
+[general]
+sleepmin=123
+sleepmax=321
+sleeprandom=1
+logenabled=1
+loglevel=4
+"@
+$iniSrand2 | Out-File -FilePath $iniFile -Encoding ASCII
+& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4','/logfile=' + $tmpLog6)
+Start-Sleep -Milliseconds 250
+$c62 = Get-Content $tmpLog6 -ErrorAction SilentlyContinue
+if ($c62 -notmatch 'Randomize sleep: 1') { Write-Error "Unit test failed: Randomize sleep message not found (sleeprandom)"; Exit 17 }
+
+# restore original launcher.ini if it existed
+If (Test-Path $backupIni2) { Move-Item $backupIni2 $iniFile -Force } Else { Remove-Item $iniFile -ErrorAction SilentlyContinue }
+
+# Test 7 - quoted execpath should be trimmed and default preset should still be selected
+Write-Host "Running unit test: quoted execpath trimming / default preset detection"
+$tmpLog7 = Join-Path $here "..\tmp\unit-test-quoted-execpath.log"
+If (Test-Path $tmpLog7) { Remove-Item $tmpLog7 -Force }
+
+$iniQuoted = @"
+[general]
+execpath="""C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe"""
+logenabled=1
+loglevel=4
+"@
+$iniQuoted | Out-File -FilePath $iniFile -Encoding ASCII
+& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4','/logfile=' + $tmpLog7,'C:\file.pdf')
+Start-Sleep -Milliseconds 250
+if (-not (Test-Path $tmpLog7)) { Write-Error "Unit test failed: quoted execpath log not created"; Exit 18 }
+$c7 = Get-Content $tmpLog7 -ErrorAction SilentlyContinue
+if ($c7 -notmatch 'Auto-selected preset: suppress') { Write-Error "Unit test failed: expected auto-selected preset 'suppress' for quoted execpath"; Exit 19 }
+
+# cleanup temp ini if present
+If (Test-Path $backupIni) { Move-Item $backupIni $projectRootIni -Force }
+
+Write-Host "All extended unit tests passed" -ForegroundColor Green
+Exit 0

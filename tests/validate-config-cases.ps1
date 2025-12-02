@@ -1,9 +1,17 @@
 <#
-  validate-config-cases.ps1
-  Exercise multiple config permutations and expect each to pass/fail.
+    validate-config-cases.ps1
 
-  This script keeps tests local (does not overwrite repo launcher.ini) by
-  creating temporary INI files and passing them to validate-config.ps1
+    Purpose:
+        Run a set of predefined INI permutations to verify the validator's
+        behavior. Each case creates a temporary INI and invokes
+        `validate-config.ps1` with the temporary file.
+
+    Notes:
+        - This script keeps tests local and will not overwrite the repository's
+            `launcher.ini` file.
+        - Exit code 0 indicates all cases behaved as expected; non-zero indicates
+            at least one case deviated from expected behavior.
+
 #>
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path

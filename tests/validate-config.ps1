@@ -1,6 +1,21 @@
 <#
-  validate-config.ps1
-  Simple validator for launcher.ini — checks that numeric values parse and that execpath looks reasonable.
+    validate-config.ps1
+
+    Purpose:
+        Validate the `[general]` section of a launcher INI file (either the real
+        `launcher.ini` or the `launcher.example.ini`) and ensure required keys are
+        present and of the expected type. This helps CI and contributors catch
+        simple configuration mistakes early.
+
+    Usage:
+        pwsh -ExecutionPolicy Bypass -File tests\validate-config.ps1
+        pwsh -ExecutionPolicy Bypass -File tests\validate-config.ps1 -IniPath C:\path\to\launcher.ini
+
+    Exit codes:
+        0 = validation passed
+        1 = validation errors found
+        2 = INI file or [general] section not found
+
 #>
 
 param(

@@ -1,7 +1,20 @@
+$ErrorActionPreference = 'Stop'
+
 <#
   lint.ps1
-  Lint script for AutoIt code using au3check if available.
-  Exits with au3check's code if found, otherwise reports it's not installed.
+
+  Purpose:
+    Run a lightweight lint check for the AutoIt source file using `au3check` if it
+    is installed and available on the PATH. This script is intentionally forgiving
+    for local developer environments: if `au3check` is not present the script
+    prints a helpful warning and exits with code 0 so CI is not blocked.
+
+  Usage:
+    pwsh -ExecutionPolicy Bypass -File scripts\lint.ps1
+
+  Notes:
+    - CI runners should have au3check available to enable a real lint check.
+    - The script returns `au3check`'s exit code when run.
 #>
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $file = Join-Path $here "..\src\reader_launcher.au3" | Resolve-Path -ErrorAction Stop
