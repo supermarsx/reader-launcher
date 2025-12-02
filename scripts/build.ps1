@@ -1,3 +1,4 @@
+#!/usr/bin/env pwsh
 $ErrorActionPreference = 'Stop'
 <#
     build.ps1
@@ -38,70 +39,95 @@ $out = Join-Path $outDir "reader_launcher.exe"
 $out_upx = Join-Path $outDir "reader_launcher-upx.exe"
 $zipName = Join-Path $outDir "reader_launcher_package.zip"
 
+## locate Aut2Exe (attempt PATH first, then common install locations)
 $aut2exe = Get-Command Aut2Exe -ErrorAction SilentlyContinue
-If (-not $aut2exe) {
-    $possible = "C:\\Program Files (x86)\\AutoIt3\\Aut2Exe\\Aut2Exe.exe"
-    If (Test-Path $possible) { $aut2exe = $possible }
+if (-not $aut2exe) {
+    $candidates = @(
+        "C:\\Program Files (x86)\\AutoIt3\\Aut2Exe\\Aut2Exe.exe",
+        "C:\\Program Files\\AutoIt3\\Aut2Exe\\Aut2Exe.exe",
+        "C:\\Program Files (x86)\\AutoIt3\\Aut2Exe.exe",
+        "C:\\Program Files\\AutoIt3\\Aut2Exe.exe",
+        "C:\\ProgramData\\chocolatey\\lib\\autoit\\tools\\Aut2Exe.exe",
+        "C:\\ProgramData\\chocolatey\\bin\\Aut2Exe.exe"
+    )
+    foreach ($p in $candidates) { if (Test-Path $p) { $aut2exe = $p; break } }
 }
 
-If (-not $aut2exe) {
+if (-not $aut2exe) {
     Write-Warning "Aut2Exe (AutoIt compiler) not found. Can't build. Install AutoIt or use AutoIt3Wrapper in SciTE."
     Exit 2
 }
 
 Write-Host "Compiling $src -> $out"
 try {
+    # Run Aut2Exe once and capture output in a temp log for diagnostics.
+    $tempLog = [IO.Path]::GetTempFileName() + '.aut2exe.log'
+    Write-Host "Aut2Exe command: $aut2exe" -ForegroundColor Cyan
+    Write-Host "Capturing Aut2Exe output in: $tempLog"
     if ($aut2exe -is [string]) {
-        & $aut2exe /in $src /out $out
+        & "$aut2exe" /in "$src" /out "$out" *>&1 | Tee-Object -FilePath $tempLog
     }
     else {
-        & $aut2exe.Path /in $src /out $out
+        & "$($aut2exe.Path)" /in "$src" /out "$out" *>&1 | Tee-Object -FilePath $tempLog
     }
-    # Some versions of Aut2Exe may return non-zero codes even when an EXE is produced.
-    # Treat a successful compilation as the produced output file existing on disk.
-    if (-not (Test-Path $out)) { Write-Error "Aut2Exe did not produce $out; compilation failed"; Exit 1 }
-}
-catch {
+
+    # Some Aut2Exe versions return non-zero even when an EXE is produced.
+    if (-not (Test-Path $out)) {
+        Write-Error "Aut2Exe did not produce $out; compilation failed. Dumping Aut2Exe log below for diagnostics:"
+        if (Test-Path $tempLog) { Get-Content $tempLog | ForEach-Object { Write-Host "    $_" } }
+        Exit 1
+    }
+
+    # remove temp log on success
+    if (Test-Path $tempLog) { Remove-Item $tempLog -Force -ErrorAction SilentlyContinue }
+} catch {
     Write-Error "Aut2Exe invocation failed: $($_.Exception.Message)"
+    if ($tempLog -and (Test-Path $tempLog)) { Write-Host "Aut2Exe log:"; Get-Content $tempLog | ForEach-Object { Write-Host "  $_" } }
     Exit 1
 }
 
-Write-Host "Creating UPX-compressed copy $out_upx (if upx available)"
-Copy-Item -Path $out -Destination $out_upx -Force
+# -----------------------------------------------------------------------------
+# UPX handling: create a compressed variant if UPX is available. If UPX isn't
+# found or fails, create an exact copy using the -upx filename so release
+# artifacts remain predictable.
+# -----------------------------------------------------------------------------
 $upx = Get-Command upx -ErrorAction SilentlyContinue
 if (-not $upx) {
-    $possibleUpx = "C:\Program Files\upx\upx.exe"
-    if (Test-Path $possibleUpx) { $upx = $possibleUpx }
-}
-if ($upx) {
-    try {
-        if ($upx -is [string]) {
-            & $upx $out_upx -9
-        }
-        else {
-            & $upx.Path $out_upx -9
-        }
-        if ($LASTEXITCODE -ne 0) { Write-Warning "UPX compression returned non-zero exit code" }
-    }
-    catch {
-        Write-Warning "UPX invocation failed: $($_.Exception.Message)"
-    }
-}
-else {
-    Write-Host "UPX not found on PATH; UPX-compressed binary will be identical to the non-UPX copy." -ForegroundColor Yellow
+    $upxCandidates = @(
+        "C:\Program Files\upx\upx.exe",
+        "C:\ProgramData\chocolatey\lib\upx\tools\upx.exe",
+        "C:\Program Files (x86)\upx\upx.exe"
+    )
+    foreach ($p in $upxCandidates) { if (Test-Path $p) { $upx = $p; break } }
 }
 
-Write-Host "Creating distribution package (zip) containing reader_launcher.exe and example config"
-if (-not (Test-Path (Join-Path $here "..\launcher.example.ini"))) {
-    Write-Warning "launcher.example.ini not found; zip package will not include example config"
+if ($upx) {
+    Write-Host "UPX found; creating compressed copy at: $out_upx"
+    # create a copy to compress so we keep the original intact
+    Copy-Item -Path $out -Destination $out_upx -Force
+    try {
+        if ($upx -is [string]) { & "$upx" "$out_upx" *>&1 | Tee-Object -FilePath ([IO.Path]::GetTempFileName() + '.upx.log') }
+        else { & "$($upx.Path)" "$out_upx" *>&1 | Tee-Object -FilePath ([IO.Path]::GetTempFileName() + '.upx.log') }
+    } catch {
+        Write-Warning "UPX invocation failed: $($_.Exception.Message) -- falling back to copying the primary EXE"
+        # On failure ensure we have a non-compressed artifact at the -upx filename
+        Copy-Item -Path $out -Destination $out_upx -Force
+    }
+} else {
+    Write-Host "UPX not found; creating an identical copy for $out_upx"
+    Copy-Item -Path $out -Destination $out_upx -Force
 }
-else {
-    $tmpFiles = @()
-    $tmpFiles += $out
-    $tmpFiles += (Join-Path $here "..\launcher.example.ini")
-    if (Test-Path $zipName) { Remove-Item $zipName -Force }
-    Compress-Archive -Path $tmpFiles -DestinationPath $zipName -Force
-}
+
+# -----------------------------------------------------------------------------
+# Create a zip package containing the non-UPX EXE and an example config if present
+# -----------------------------------------------------------------------------
+$tmpFiles = @()
+$tmpFiles += $out
+$exampleIni = Join-Path $here "..\launcher.example.ini"
+if (Test-Path $exampleIni) { $tmpFiles += $exampleIni } else { Write-Warning "launcher.example.ini not found; zip package will not include example config" }
+
+if (Test-Path $zipName) { Remove-Item $zipName -Force }
+Compress-Archive -Path $tmpFiles -DestinationPath $zipName -Force
 
 Write-Host "Build output placed in: $outDir"
 Write-Host "Generating checksums (SHA256, SHA512) for built artifacts"
