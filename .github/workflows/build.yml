@@ -46,6 +46,20 @@ jobs:
           }
           if ($fail) { exit 1 }
 
+      - name: Confirm .ico included in zip packages
+        shell: pwsh
+        run: |
+          $zip1 = Join-Path $PWD 'dist\reader_launcher_package.zip'
+          $zip2 = Join-Path $PWD 'dist\reader_launcher_upx_package.zip'
+          foreach ($z in @($zip1,$zip2)) {
+            if (-not (Test-Path $z)) { Write-Error "Missing expected zip: $z"; exit 1 }
+            $entries = (Get-ChildItem -Path (Expand-Archive -Path $z -DestinationPath (Join-Path $PWD 'dist/tmp_unzip') -Force -PassThru) -File -Recurse -ErrorAction SilentlyContinue) | Where-Object { $_.Extension -eq '.ico' }
+            # cleanup expanded area
+            if (Test-Path (Join-Path $PWD 'dist/tmp_unzip')) { Remove-Item -Recurse -Force (Join-Path $PWD 'dist/tmp_unzip') }
+            if ($entries.Count -eq 0) { Write-Error "Zip $z does not contain an .ico file"; exit 1 }
+            else { Write-Host "Zip $z contains .ico file(s):"; $entries | ForEach-Object { Write-Host "  $($_.FullName)" } }
+          }
+
       - name: Run AutoIt unit tests
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests\unit\run-unit-tests.ps1
 
