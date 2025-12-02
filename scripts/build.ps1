@@ -62,15 +62,33 @@ if (-not $aut2exe) {
 
 Write-Host "Compiling $src -> $out"
 try {
+    # detect an icon file in assets (pick the first .ico) and include it when invoking Aut2Exe
+    $assetsDir = Join-Path $here "..\assets"
+    $icon = $null
+    if (Test-Path $assetsDir) {
+        $ico = Get-ChildItem -Path $assetsDir -Filter *.ico -File -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($ico) { $icon = $ico.FullName; Write-Host "Found icon to embed: $icon" -ForegroundColor Cyan }
+    }
     # Run Aut2Exe once and capture output in a temp log for diagnostics.
     $tempLog = [IO.Path]::GetTempFileName() + '.aut2exe.log'
     Write-Host "Aut2Exe command: $aut2exe" -ForegroundColor Cyan
     Write-Host "Capturing Aut2Exe output in: $tempLog"
-    if ($aut2exe -is [string]) {
-        & "$aut2exe" /in "$src" /out "$out" *>&1 | Tee-Object -FilePath $tempLog
+    # if we found an icon, pass /icon argument to Aut2Exe; otherwise omit it
+    if ($icon) {
+        if ($aut2exe -is [string]) {
+            & "$aut2exe" /in "$src" /out "$out" /icon "$icon" *>&1 | Tee-Object -FilePath $tempLog
+        }
+        else {
+            & "$($aut2exe.Path)" /in "$src" /out "$out" /icon "$icon" *>&1 | Tee-Object -FilePath $tempLog
+        }
     }
     else {
-        & "$($aut2exe.Path)" /in "$src" /out "$out" *>&1 | Tee-Object -FilePath $tempLog
+        if ($aut2exe -is [string]) {
+            & "$aut2exe" /in "$src" /out "$out" *>&1 | Tee-Object -FilePath $tempLog
+        }
+        else {
+            & "$($aut2exe.Path)" /in "$src" /out "$out" *>&1 | Tee-Object -FilePath $tempLog
+        }
     }
 
     # Some Aut2Exe versions return non-zero even when an EXE is produced.
@@ -125,6 +143,7 @@ if ($upx) {
 # -----------------------------------------------------------------------------
 $tmpFiles = @()
 $tmpFiles += $out
+if ($icon) { $tmpFiles += $icon }
 $exampleIni = Join-Path $here "..\launcher.example.ini"
 if (Test-Path $exampleIni) { $tmpFiles += $exampleIni } else { Write-Warning "launcher.example.ini not found; zip package will not include example config" }
 
@@ -132,8 +151,9 @@ if (Test-Path $zipName) { Remove-Item $zipName -Force }
 Compress-Archive -Path $tmpFiles -DestinationPath $zipName -Force
 
 # Build a second zip that contains the UPX variant (or the copied -upx file)
-$tmpFilesUpx = @()
+ $tmpFilesUpx = @()
 $tmpFilesUpx += $out_upx
+if ($icon) { $tmpFilesUpx += $icon }
 if (Test-Path $exampleIni) { $tmpFilesUpx += $exampleIni }
 if (Test-Path $zipNameUpx) { Remove-Item $zipNameUpx -Force }
 Compress-Archive -Path $tmpFilesUpx -DestinationPath $zipNameUpx -Force
