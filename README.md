@@ -8,6 +8,8 @@ If there is no `launcher.ini` present, the launcher will use built-in defaults a
 
 This project is intentionally small — it helps automate launching Reader in circumstances where you want a short delay and optional debug options.
 
+![GitHub stars](https://img.shields.io/github/stars/supermarsx/reader-launcher?style=flat-square) ![GitHub forks](https://img.shields.io/github/forks/supermarsx/reader-launcher?style=flat-square) ![Watchers](https://img.shields.io/github/watchers/supermarsx/reader-launcher?style=flat-square) ![Open issues](https://img.shields.io/github/issues/supermarsx/reader-launcher?style=flat-square) ![Downloads](https://img.shields.io/github/downloads/supermarsx/reader-launcher/total?style=flat-square) ![CI Test](https://img.shields.io/github/actions/workflow/status/supermarsx/reader-launcher/test.yml?branch=main&style=flat-square) ![Made with AutoIt](https://img.shields.io/badge/Made%20with-AutoIt-blue?logo=autoit&style=flat-square)
+
 ## Features
 
 - Configurable delay before launching (fixed or randomized range)
@@ -41,13 +43,13 @@ reader_launcher.exe /debug=1 /debugnosleep=1 "C:\file.pdf"
 The value file `launcher.ini` contains the [general] section with the following keys (all optional — sensible defaults are used when omitted):
 
 - `sleep` — Fixed sleep time in milliseconds before launching. Default: `1000`.
-- `sleeprand` — When `1` (true), a random sleep between `sleepmin` and `sleepmax` will be used instead of `sleep`. Default: `0`.
+- `sleeprand` — When `1`, a random sleep between `sleepmin` and `sleepmax` will be used instead of `sleep`.
 - `sleepmin` — Minimum random sleep (ms). Default: `950`.
 - `sleepmax` — Maximum random sleep (ms). Default: `1950`.
 - `debug` — When `1`, debug message boxes are shown during the run. Default: `0`.
 - `debugnosleep` — When `1`, the script will skip sleeping (useful for testing). Default: `0`.
 - `debugnoexec` — When `1`, the script will skip actually starting the executable (useful for dry-runs). Default: `0`.
-- `execpath` — The full path of the executable to launch. If missing, the launcher will try to use `C:\` and will warn or refuse to launch if the path doesn't exist.
+- `execpath` — The full path of the executable to launch.
 - `execstyle` — How the target should be launched; supported values: `ShellExecute` (default), `Run`, `RunWait`, `Cmd`.
 - `logenabled` — When `1`, writes runtime logs to `logfile`. Default: `0`.
 - `logfile` — Path to the log file (if enabled). Default: `./logs/reader-launcher.log`.
@@ -56,6 +58,10 @@ The value file `launcher.ini` contains the [general] section with the following 
 - `autodiscover` — Enable automatic discovery of a candidate executable through registry and common folders. Default: `0`.
 - `autodiscover_sources` — Comma-separated discovery sources (e.g. `registry,programfiles`). Default: `registry,programfiles`.
 - `autodiscover_persist` — When `1`, persist discovered path back into `launcher.ini`. Default: `0`.
+- `extra_params` — Optional additional argument string to prepend to every execution (useful to pass flags like `/s` to Acrobat). Default: empty.
+- `preset` — Name of a pre-defined parameter preset that will be prepended to the parameter list. Presets are defined in the `[presets]` section and common Acrobat presets are included by default.
+
+Presets can be added / overridden in a `[presets]` INI section. See `launcher.example.ini` for examples.
 
 Sample `launcher.ini`:
 
@@ -81,10 +87,6 @@ AutoIt binaries (and other small compiled utilities) can sometimes be flagged as
 
 The `scripts/` folder contains helper scripts for common development tasks (PowerShell). They are small, self-checking helpers that run on Windows / PowerShell:
 
-- `scripts/lint.ps1` — run au3check (if installed) against `reader_launcher.au3`.
-- `scripts/format.ps1` — runs an AutoIt formatter (if present) or prints guidance.
-- `scripts/test.ps1` — runs tests under `tests/` (`validate-config.ps1`, `autodiscovery-test.ps1`).
-- `scripts/build.ps1` — attempt to compile `reader_launcher.au3` into `dist\reader_launcher.exe` using Aut2Exe if installed.
 
 Example quick checks (PowerShell):
 
@@ -96,20 +98,14 @@ pwsh -ExecutionPolicy Bypass -File scripts\build.ps1
 
 ## Development / Building
 
-- The AutoIt script is `reader_launcher.au3`. You can compile it using AutoIt3Wrapper (usually available from SciTE or the AutoIt tools).
-- Make sure `launcher.ini` is present beside the compiled exe when testing.
 
 ### CI & contribution
 
 This repository includes a simple GitHub Actions workflow that runs on
 Windows runners and performs the following steps:
 
-- lint the source (when au3check is available)
-- run formatter if present (au3fix)
-- run the PowerShell tests (config validator and config-cases)
-- install AutoIt via Chocolatey and attempt a build (Aut2Exe)
 
-The workflow lives at `.github/workflows/ci.yml`.
+CI workflows are split across `.github/workflows/` (lint.yml, format.yml, test.yml, build.yml, release.yml).
 
 ## Diagnostic / Tests
 
@@ -118,3 +114,7 @@ A small PowerShell validator is included in `tests/validate-config.ps1` to check
 ## License
 
 This repository is distributed under the terms described in `license.md`.
+
+The Build workflow compiles the exe (non-UPX and UPX variants) and uploads artifacts to `dist/`.
+Both a non-UPX `reader_launcher.exe` and a UPX-compressed `reader_launcher-upx.exe` are produced when UPX is available on the build runner. A zipped package containing `reader_launcher.exe` and `launcher.example.ini` is also generated so the release contains a ready-to-download package.
+pwsh -ExecutionPolicy Bypass -File scripts\lint.ps1

@@ -72,6 +72,9 @@ Local $raw_execstyle = IniRead($cfg_filename, $cfg_section1, "execstyle", "Shell
 Local $raw_autodiscover = IniRead($cfg_filename, $cfg_section1, "autodiscover", 0)
 Local $raw_autodiscover_sources = IniRead($cfg_filename, $cfg_section1, "autodiscover_sources", "registry,programfiles")
 Local $raw_autodiscover_persist = IniRead($cfg_filename, $cfg_section1, "autodiscover_persist", 0)
+; Extra params and presets
+Local $raw_extra_params = IniRead($cfg_filename, $cfg_section1, "extra_params", "")
+Local $raw_preset = IniRead($cfg_filename, $cfg_section1, "preset", "")
 
 ; Normalize / coerce to numeric where required — use Int() to convert string
 ; values from INI to integers and protect our runtime logic.
@@ -96,6 +99,8 @@ Local $cfg_execstyle = StringLower(StringStripWS($raw_execstyle, 3))
 Local $cfg_autodiscover = Int($raw_autodiscover)
 Local $cfg_autodiscover_sources = StringSplit(StringStripWS($raw_autodiscover_sources, 3), ",", 2)
 Local $cfg_autodiscover_persist = Int($raw_autodiscover_persist)
+Local $cfg_extra_params = StringStripWS(StringReplace($raw_extra_params, '"', ''), 7)
+Local $cfg_preset = StringStripWS($raw_preset, 3)
 
 ; Ensure sensible sleep range — avoid negative or inverted limits
 If $cfg_sleepmin < 0 Then $cfg_sleepmin = 0
@@ -121,7 +126,12 @@ If ($cfg_debugnosleep = 0) Then Sleep($ex_sleep)
 ; Build the command-line parameter string to forward to the target executable
 ; (we remove the script name itself so only user-supplied params remain)
 Local $ex_parameters = StringStripWS(StringReplace($CmdLineRaw, @ScriptName, ""), 7)
-debug("Launcher parameters: " & $ex_parameters)
+; If the user requested a preset, look up default preset parameters.
+Local $presetParams = GetPresetParams($cfg_preset)
+
+; Build final parameters: presets + extra_params + original passed-in params.
+Local $final_parameters = StringStripWS($presetParams & " " & $cfg_extra_params & " " & $ex_parameters, 7)
+debug("Launcher parameters: " & $final_parameters)
 
 debug("Executable path: " & $cfg_execpath)
 
@@ -161,6 +171,14 @@ If $cfg_autodiscover = 1 Then
 	EndIf
 EndIf
 
+; If a preset has not been chosen explicitly, try to pick a sensible default
+; based on the configured executable path. This helps automation where users
+; don't provide a preset but expect common Reader behaviors (e.g., suppress splash)
+If StringLen($cfg_preset) = 0 Then
+	$cfg_preset = DetermineDefaultPreset($cfg_execpath)
+	debug("Auto-selected preset: " & $cfg_preset)
+EndIf
+
 ; Verify executable exists before attempting to execute unless debugnoexec set
 If ($cfg_debugnoexec = 0) Then
 	If StringLen($cfg_execpath) = 0 Then
@@ -176,7 +194,7 @@ If ($cfg_debugnoexec = 0) Then
 	EndIf
 
 	; Invoke the configured execution style (ShellExecute default)
-	Local $rc = ExecLaunch($cfg_execpath, $ex_parameters, $cfg_execstyle)
+	Local $rc = ExecLaunch($cfg_execpath, $final_parameters, $cfg_execstyle)
 	_WriteLog("info", "Executed with style=" & $cfg_execstyle & " rc=" & $rc)
 EndIf
 
@@ -271,8 +289,8 @@ EndFunc   ;==>ExecLaunch
 ; Parse command-line overrides (very simple parser)
 ; Supported forms include: --key=value, /key:value, key=value or /key
 Func ParseCmdLineArgs()
-	If $CmdLineCount = 0 Then Return
-	For $i = 0 To $CmdLineCount - 1
+	If $CmdLine[0] = 0 Then Return
+	For $i = 0 To $CmdLine[0] - 1
 		Local $arg = $CmdLine[$i]
 		Local $lower = StringLower($arg)
 		; support key=value or /key:value or --key=value
@@ -330,24 +348,20 @@ Func AutoDiscoverExecPath(ByRef $sources)
 				"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\AcroRd32.exe", _
 						"HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\App Paths\AcroRd32.exe"
 				]
-				For $k = 0 To UBound($keys) - 1
-					Local $r = RegRead($keys[$k], "")
-					; RegRead sets @error when the key is not present — guard on that.
-					If @error = 0 And StringLen($r) Then
-						If FileExists($r) Then Return $r
-					EndIf
-				Next
+				; try known AppPaths keys
+				Local $r = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\AcroRd32.exe", "")
+				If @error = 0 And StringLen($r) Then
+					If FileExists($r) Then Return $r
+				EndIf
+				Local $r2 = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\App Paths\AcroRd32.exe", "")
+				If @error = 0 And StringLen($r2) Then
+					If FileExists($r2) Then Return $r2
+				EndIf
 			Case "programfiles", "programfilesx86", "programfilesx64"
 				; check common locations — order: Program Files (x86) and Program Files
-				Local $candidates[6] = [ _
-						@ProgramFilesDir & "\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe", _
-						@ProgramFilesDir & "\Adobe\Acrobat\Acrobat.exe", _
-						@ProgramFilesDir & "\SumatraPDF\SumatraPDF.exe", _
-						@ProgramFilesDir & "(x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe", _
-						@ProgramFilesDir & "(x86)\Adobe\Acrobat\Acrobat.exe", _
-						@ProgramFilesDir & "(x86)\SumatraPDF\SumatraPDF.exe" _
-						]
-				For $c = 0 To UBound($candidates) - 1
+				Local $candList = @ProgramFilesDir & "\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe|" & @ProgramFilesDir & "\Adobe\Acrobat\Acrobat.exe|" & @ProgramFilesDir & "\SumatraPDF\SumatraPDF.exe|" & @ProgramFilesDir & "(x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe|" & @ProgramFilesDir & "(x86)\Adobe\Acrobat\Acrobat.exe|" & @ProgramFilesDir & "(x86)\SumatraPDF\SumatraPDF.exe"
+				Local $candidates = StringSplit($candList, "|", 2)
+				For $c = 1 To $candidates[0]
 					Local $path = $candidates[$c]
 					; attempt to normalize odd strings like (x86) — perform two common expands
 					$path = StringReplace($path, "(x86)", "Program Files (x86)")
@@ -363,3 +377,51 @@ Func AutoDiscoverExecPath(ByRef $sources)
 	Next
 	Return ""
 EndFunc   ;==>AutoDiscoverExecPath
+
+; DetermineDefaultPreset(path) - heuristic choice of preset based on exec name
+Func DetermineDefaultPreset($path)
+	If StringLen($path) = 0 Then Return ""
+	Local $lower = StringLower($path)
+	; Acrobat Reader / Acrobat -> prefer suppressing splash (/s)
+	If StringInStr($lower, "acro") Or StringInStr($lower, "acrord") Or StringInStr($lower, "acroRd") Then
+		Return "suppress"
+	EndIf
+	; SumatraPDF — no special flags by default
+	If StringInStr($lower, "sumatrapdf") Then Return ""
+	; Fallback: no preset
+	Return ""
+EndFunc
+
+; GetPresetParams(name) - return param string for known preset or from [presets] INI.
+Func GetPresetParams($name)
+	If StringLen($name) = 0 Then Return ""
+
+	; allow the INI to override or define custom presets in [presets] section
+	Local $iniVal = IniRead($cfg_filename, "presets", $name, "")
+	If StringLen($iniVal) Then Return StringStripWS($iniVal, 7)
+
+	; built-in helpers for common Acrobat/Reader options
+	Local $n = StringLower($name)
+	; Match several common names using an If/ElseIf chain to avoid complex Case expressions
+	If $n = "open" Then
+		Return ""
+	ElseIf $n = "newinstance" Then
+		Return "/n"
+	ElseIf $n = "suppress" Or $n = "splash" Then
+		Return "/s"
+	ElseIf $n = "openminimized" Or $n = "minimized" Then
+		Return "/h"
+	ElseIf $n = "openquiet" Or $n = "nowindow" Then
+		Return "/o"
+	ElseIf $n = "printdialog" Then
+		Return "/p"
+	ElseIf $n = "silentprint" Then
+		Return "/t"
+	ElseIf $n = "silentprintdefaults" Or $n = "pt" Or $n = "/pt" Then
+		Return "/pt"
+	ElseIf $n = "external" Or $n = "dde" Then
+		Return "/x"
+	Else
+		Return ""
+	EndIf
+EndFunc

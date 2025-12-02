@@ -52,4 +52,13 @@ if (-not (Test-Path (Join-Path $here "..\launcher.example.ini"))) {
 }
 
 Write-Host "Build output placed in: $outDir"
+Write-Host "Generating checksums (SHA256, SHA512) for built artifacts"
+$checksums = Join-Path $outDir "checksums.txt"
+If (Test-Path $checksums) { Remove-Item $checksums -Force }
+Get-ChildItem -Path $outDir -File | ForEach-Object {
+  $sha256 = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash
+  $sha512 = (Get-FileHash -Path $_.FullName -Algorithm SHA512).Hash
+  "$($_.Name) SHA256:$sha256 SHA512:$sha512" | Out-File -FilePath $checksums -Append -Encoding ASCII
+}
+Write-Host "Checksums written to: $checksums"
 Exit 0

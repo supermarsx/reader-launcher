@@ -19,3 +19,5 @@ All notable changes to this project will be documented in this file.
 - Add: tests for config cases (`tests/validate-config-cases.ps1`) and mark autodiscovery-test optional
 - Add: GitHub Actions CI (`.github/workflows/ci.yml`) — lint, tests, build on Windows
 - Replace: split CI into separate workflows (lint, format, test, build) and a follow-up autorelease workflow
+- Add: Build produces UPX and non-UPX binaries, zip package and release attachments
+- Add: Unit test harness (tests/unit/run-unit-tests.ps1) and CI-run unit tests in build workflow
