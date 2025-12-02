@@ -4,7 +4,7 @@
   Exits with au3check's code if found, otherwise reports it's not installed.
 #>
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$file = Join-Path $here "..\reader_launcher.au3" | Resolve-Path -ErrorAction Stop
+$file = Join-Path $here "..\src\reader_launcher.au3" | Resolve-Path -ErrorAction Stop
 
 Write-Host "Running lint for $file"
 

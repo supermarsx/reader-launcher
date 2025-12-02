@@ -64,17 +64,20 @@ if ($values.ContainsKey('execpath')) {
     $path = $values['execpath'].Trim('"')
     if (-not (Test-Path $path)) {
         Write-Warning "execpath does not exist: $path — that might be OK if you use a different machine"
-    } else {
+    }
+    else {
         Write-Host "execpath exists: $path" -ForegroundColor Green
     }
-} else {
+}
+else {
     $errors += 'Missing execpath'
 }
 
 if ($errors.Count -gt 0) {
     Write-Error "Configuration validation failed:`n`n$($errors -join "`n")"
     exit 1
-} else {
+}
+else {
     Write-Host "Validation passed." -ForegroundColor Green
     exit 0
 }

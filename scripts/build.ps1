@@ -4,7 +4,7 @@
 #>
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$src = Join-Path $here "..\reader_launcher.au3" | Resolve-Path -ErrorAction Stop
+$src = Join-Path $here "..\src\reader_launcher.au3" | Resolve-Path -ErrorAction Stop
 $outDir = Join-Path $here "..\dist"
 If (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }
 $out = Join-Path $outDir "reader_launcher.exe"

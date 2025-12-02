@@ -4,7 +4,7 @@
   is a safe no-op that will notify if a plausible formatter is installed.
 #>
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$file = Join-Path $here "..\reader_launcher.au3" | Resolve-Path -ErrorAction Stop
+$file = Join-Path $here "..\src\reader_launcher.au3" | Resolve-Path -ErrorAction Stop
 
 Write-Host "Formatting $file" -ForegroundColor Cyan
 
