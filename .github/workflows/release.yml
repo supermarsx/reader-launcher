@@ -59,6 +59,14 @@ jobs:
           echo "Found artifact: $ART_URL"
           curl -L -H "Authorization: Bearer $TOKEN" -o artifact.zip "$ART_URL"
           unzip -o artifact.zip -d artifact
+          # determine whether the artifact contains a dist/ subfolder or files in the root
+          if [ -d artifact/dist ]; then
+            echo "Detected artifact/dist — using artifact/dist as the artifact base"
+            echo "ARTIFACT_DIR=artifact/dist" >> $GITHUB_ENV
+          else
+            echo "artifact/dist not found — using artifact as the artifact base"
+            echo "ARTIFACT_DIR=artifact" >> $GITHUB_ENV
+          fi
 
       - name: Attach build artifacts to release
         env:
@@ -69,12 +77,17 @@ jobs:
           REPO="${{ github.repository }}"
           # upload any files found under artifact/dist
           ls artifact
-          if [ -d artifact/dist ]; then
-            for f in artifact/dist/*; do
+          if [ -d "$ARTIFACT_DIR" ]; then
+            for f in "$ARTIFACT_DIR"/*; do
               fname=$(basename "$f")
               echo "Uploading $fname to release $RELEASE_ID"
               curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" --data-binary @"$f" "https://uploads.github.com/repos/$REPO/releases/$RELEASE_ID/assets?name=$fname"
             done
+            # also attach the original artifact.zip (downloaded archive) for debugging
+            if [ -f artifact.zip ]; then
+              echo "Uploading artifact.zip to release $RELEASE_ID"
+              curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" --data-binary @artifact.zip "https://uploads.github.com/repos/$REPO/releases/$RELEASE_ID/assets?name=artifact.zip"
+            fi
           else
             echo "No artifact/dist found to upload"
             exit 1
@@ -86,8 +99,8 @@ jobs:
           VTKEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
         run: |
           mkdir -p vt_results
-          if [ -d artifact/dist ]; then
-            for f in artifact/dist/*; do
+          if [ -d "$ARTIFACT_DIR" ]; then
+            for f in "$ARTIFACT_DIR"/*; do
               fname=$(basename "$f")
               sha256=$(sha256sum "$f" | awk '{print $1}')
               echo "File: $fname SHA256: $sha256" >> vt_results/scan_summary.txt
@@ -136,13 +149,19 @@ jobs:
           STRICT: ${{ secrets.RELEASE_STRICT_VERIFY }}
         run: |
           mkdir -p vt_results
-          if [ -d artifact/dist ]; then
+          if [ -d "$ARTIFACT_DIR" ]; then
             FAIL=0
-            for f in artifact/dist/*; do
+            for f in "$ARTIFACT_DIR"/*; do
               fname=$(basename "$f")
               echo "--- Verifying $fname ---" >> vt_results/verify_summary.txt
               # Use PowerShell helper to verify checksums and optionally query VT
-              pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -ArtifactPath "$f" -Checksums artifact/dist/checksums.txt -VtKey "$VTKEY" > vt_results/verify_$fname.txt 2>&1
+              # choose checksum path based on ARTIFACT_DIR
+              if [ -f "$ARTIFACT_DIR/checksums.txt" ]; then
+                checksPath="$ARTIFACT_DIR/checksums.txt"
+              else
+                checksPath=artifact/dist/checksums.txt
+              fi
+              pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -ArtifactPath "$f" -Checksums "$checksPath" -VtKey "$VTKEY" > vt_results/verify_$fname.txt 2>&1
               rc=$?
               cat vt_results/verify_$fname.txt >> vt_results/verify_summary.txt
               # if strict mode is enabled, fail on checksum mismatch or VT detection
@@ -184,7 +203,8 @@ jobs:
         with:
           script: |
             const fs = require('fs')
-            const artifactDir = 'artifact/dist'
+            // prefer environment-specified ARTIFACT_DIR if present
+            const artifactDir = process.env.ARTIFACT_DIR && process.env.ARTIFACT_DIR.length ? process.env.ARTIFACT_DIR : 'artifact/dist'
             let bodySections = []
             // append checksums if present
             const checksPath = `${artifactDir}/checksums.txt`

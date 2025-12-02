@@ -38,6 +38,8 @@ If (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir | Out
 $out = Join-Path $outDir "reader_launcher.exe"
 $out_upx = Join-Path $outDir "reader_launcher-upx.exe"
 $zipName = Join-Path $outDir "reader_launcher_package.zip"
+# Also produce a UPX package that contains the compressed executable when present
+$zipNameUpx = Join-Path $outDir "reader_launcher_upx_package.zip"
 
 ## locate Aut2Exe (attempt PATH first, then common install locations)
 $aut2exe = Get-Command Aut2Exe -ErrorAction SilentlyContinue
@@ -128,6 +130,13 @@ if (Test-Path $exampleIni) { $tmpFiles += $exampleIni } else { Write-Warning "la
 
 if (Test-Path $zipName) { Remove-Item $zipName -Force }
 Compress-Archive -Path $tmpFiles -DestinationPath $zipName -Force
+
+# Build a second zip that contains the UPX variant (or the copied -upx file)
+$tmpFilesUpx = @()
+$tmpFilesUpx += $out_upx
+if (Test-Path $exampleIni) { $tmpFilesUpx += $exampleIni }
+if (Test-Path $zipNameUpx) { Remove-Item $zipNameUpx -Force }
+Compress-Archive -Path $tmpFilesUpx -DestinationPath $zipNameUpx -Force
 
 Write-Host "Build output placed in: $outDir"
 Write-Host "Generating checksums (SHA256, SHA512) for built artifacts"

@@ -20,6 +20,14 @@ jobs:
       - name: Run build script
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\build.ps1
 
+      - name: Verify produced artifacts
+        run: |
+          Write-Host "Contents of dist:"; Get-ChildItem -Path dist -Force | Format-Table -AutoSize
+          $expected = @('reader_launcher.exe','reader_launcher-upx.exe','reader_launcher_package.zip','reader_launcher_upx_package.zip','checksums.txt')
+          $missing = @()
+          foreach ($e in $expected) { if (-not (Test-Path (Join-Path 'dist' $e))) { $missing += $e } }
+          if ($missing.Count -gt 0) { Write-Error "Missing expected artifact(s): $($missing -join ', ')"; exit 1 }
+
       - name: Run AutoIt unit tests
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests\unit\run-unit-tests.ps1
 
