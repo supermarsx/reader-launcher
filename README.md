@@ -94,7 +94,7 @@ Additionally, the release workflow will attempt an automated VirusTotal scan whe
 
 ## Scripts (lint / format / test / build)
 
-The `scripts/` folder contains helper scripts for common development tasks (PowerShell). They are small, self-checking helpers that run on Windows / PowerShell:
+The `scripts/` folder contains helper scripts for common development tasks (PowerShell). They are small, self-checking helpers that run on Windows / PowerShell.
 
 Specifically these scripts are provided:
 
@@ -102,6 +102,8 @@ Specifically these scripts are provided:
 - `scripts/format.ps1` — runs an AutoIt formatter (if present) or prints guidance.
 - `scripts/test.ps1` — runs tests under `tests/` (`validate-config.ps1`, `autodiscovery-test.ps1`).
 - `scripts/build.ps1` — attempt to compile `reader_launcher.au3` into `dist\\reader_launcher.exe` using Aut2Exe if installed.
+- `scripts/build.ps1` — attempt to compile `reader_launcher.au3` into `dist\\reader_launcher.exe` using Aut2Exe if installed.
+- `scripts/verify-release.ps1` — helper to verify downloaded artifacts against `dist/checksums.txt` and optionally query VirusTotal (see scripts header for usage).
 
 
 Example quick checks (PowerShell):
@@ -120,11 +122,11 @@ pwsh -ExecutionPolicy Bypass -File scripts\build.ps1
 
 ### CI & contribution
 
-This repository includes a simple GitHub Actions workflow that runs on
-Windows runners and performs the following steps:
-
+This repository includes a simple GitHub Actions workflow that runs on Windows.
 
 CI workflows are split across `.github/workflows/` (lint.yml, format.yml, test.yml, build.yml, release.yml).
+
+Note: There used to be a combined `ci.yml` workflow in `.github/workflows/`. The repo now uses separated workflows (lint, format, test, build, release). The combined `ci.yml` has been deprecated and converted to a manual workflow to avoid duplicate automatic CI runs.
 
 ### How to verify release artifacts locally (checksums and VirusTotal)
 

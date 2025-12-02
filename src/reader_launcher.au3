@@ -343,11 +343,7 @@ Func AutoDiscoverExecPath(ByRef $sources)
 		Local $src = StringLower(StringStripWS($sources[$s], 3))
 		Switch $src
 			Case "registry"
-				; check App Paths for AcroRd32.exe
-				Local $keys[2] = [
-				"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\AcroRd32.exe", _
-						"HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\App Paths\AcroRd32.exe"
-				]
+				; check App Paths for AcroRd32.exe (explicit keys read below)
 				; try known AppPaths keys
 				Local $r = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\AcroRd32.exe", "")
 				If @error = 0 And StringLen($r) Then

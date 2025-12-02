@@ -128,3 +128,26 @@ jobs:
           else
             echo "No artifacts found to scan"
           fi
+
+      - name: Verify artifacts against checksums and optionally query VirusTotal
+        env:
+          VTKEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p vt_results
+          if [ -d artifact/dist ]; then
+            for f in artifact/dist/*; do
+              fname=$(basename "$f")
+              echo "--- Verifying $fname ---" >> vt_results/verify_summary.txt
+              # Use PowerShell helper to verify checksums and optionally query VT
+              pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -ArtifactPath "$f" -Checksums artifact/dist/checksums.txt -VtKey "$VTKEY" >> vt_results/verify_summary.txt 2>&1 || true
+            done
+            # attach verify_summary to release for convenience
+            RELEASE_ID=${{ steps.create_release.outputs.result }}
+            if [ -f vt_results/verify_summary.txt ]; then
+              echo "Attaching vt_results/verify_summary.txt to release $RELEASE_ID"
+              curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" --data-binary @vt_results/verify_summary.txt "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=vt_verify_summary.txt"
+            fi
+          else
+            echo "No artifacts found to verify"
+          fi

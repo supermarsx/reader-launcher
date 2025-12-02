@@ -184,3 +184,76 @@ If (Test-Path $backupIni) { Move-Item $backupIni $projectRootIni -Force }
 
 Write-Host "All extended unit tests passed" -ForegroundColor Green
 Exit 0
+
+## ----------------------
+## ExecLaunch behavior tests
+## These tests actually execute a tiny harmless helper batch file and assert
+## the launcher logs the expected 'Executed with style=...' message.
+## Note: They require real process execution so are only run when AutoIt is
+## available (CI) — the tests will clean up temporary files after completion.
+## ----------------------
+
+$helperBat = Join-Path $here "..\tmp\test-helper.bat"
+$helperContent = "@echo off`necho HELLO %*`nexit /B 0"
+$helperContent | Out-File -FilePath $helperBat -Encoding ASCII
+
+# Ensure we have a backup of any real launcher.ini and write a small config
+If (Test-Path $projectRootIni) { $bak2 = Join-Path $here "..\tmp\launcher.ini.exec.bak"; Copy-Item $projectRootIni $bak2 -Force }
+$execIni = @"
+[general]
+execpath=$helperBat
+logenabled=1
+loglevel=4
+"@
+$execIni | Out-File -FilePath $projectRootIni -Encoding ASCII
+
+# helper to run one execstyle test
+function RunExecStyle($style, $logname) {
+    $outLog = Join-Path $here "..\tmp\$logname"
+    If (Test-Path $outLog) { Remove-Item $outLog -Force }
+    Write-Host "Testing execstyle=$style -> logging to $outLog"
+    & $autoit.Path $script.Path @('/debugnosleep=1','/debugnoexec=0','/logenabled=1','/loglevel=4','/logfile=' + $outLog, '/execstyle=' + $style, 'C:\dummy.pdf')
+    Start-Sleep -Milliseconds 300
+    if (-not (Test-Path $outLog)) { Write-Error "ExecLaunch test failed: log for style $style not created"; Exit 20 }
+    $t = Get-Content $outLog -ErrorAction SilentlyContinue
+    if ($t -notmatch "Executed with style=$style") { Write-Error "ExecLaunch test failed: expected 'Executed with style=$style' in log"; Exit 21 }
+}
+
+RunExecStyle 'run' 'unit-test-exec-run.log'
+RunExecStyle 'runwait' 'unit-test-exec-runwait.log'
+RunExecStyle 'cmd' 'unit-test-exec-cmd.log'
+RunExecStyle 'shellexecute' 'unit-test-exec-shellexecute.log'
+
+# Additional ExecLaunch edge cases
+#  - Ensure RunWait recorded rc=0 (helper returns 0)
+#  - Ensure Run style produced a numeric PID/rc recorded
+#  - Parameter forwarding with spaces and quoted-like elements are preserved
+
+# Check runwait rc==0
+$runwaitLog = Join-Path $here "..\tmp\unit-test-exec-runwait.log"
+if (-not (Test-Path $runwaitLog)) { Write-Error "ExecLaunch runwait log missing"; Exit 22 }
+$runwaitContent = Get-Content $runwaitLog -Raw -ErrorAction SilentlyContinue
+if ($runwaitContent -notmatch 'Executed with style=runwait.*rc=0') { Write-Error "ExecLaunch runwait test failed: expected rc=0"; Exit 23 }
+
+# Check run returned numeric rc/pid
+$runLog = Join-Path $here "..\tmp\unit-test-exec-run.log"
+if (-not (Test-Path $runLog)) { Write-Error "ExecLaunch run log missing"; Exit 24 }
+$runContent = Get-Content $runLog -Raw -ErrorAction SilentlyContinue
+if ($runContent -notmatch 'Executed with style=run.*rc=[0-9]+') { Write-Error "ExecLaunch run test failed: expected numeric rc/pid"; Exit 25 }
+
+# Parameter forwarding edge-case: spaces and multiple extra_params
+$paramLog = Join-Path $here "..\tmp\unit-test-params-space.log"
+If (Test-Path $paramLog) { Remove-Item $paramLog -Force }
+Write-Host "Testing parameter forwarding with spaces and extra_params"
+& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4','/logfile=' + $paramLog,'/extra_params=/x /flag1','C:\my path\file one.pdf')
+Start-Sleep -Milliseconds 300
+if (-not (Test-Path $paramLog)) { Write-Error "ExecLaunch parameter-forwarding log missing"; Exit 26 }
+$pcont = Get-Content $paramLog -Raw -ErrorAction SilentlyContinue
+if ($pcont -notmatch '/x' -or $pcont -notmatch 'C:\my path\\file one.pdf') { Write-Error "Parameter forwarding test failed: parameters not preserved in log"; Exit 27 }
+
+# cleanup helper and restore ini
+If (Test-Path $helperBat) { Remove-Item $helperBat -Force }
+If (Test-Path $bak2) { Move-Item $bak2 $projectRootIni -Force } Else { Remove-Item $projectRootIni -ErrorAction SilentlyContinue }
+
+Write-Host "ExecLaunch behavior tests passed" -ForegroundColor Green
+Exit 0
