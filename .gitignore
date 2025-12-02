@@ -7,3 +7,4 @@ logs/
 # temporary files
 /tests/tmp
 temp_*.au3
+launcher.ini

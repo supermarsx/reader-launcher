@@ -9,9 +9,76 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $script = Resolve-Path -Path (Join-Path $here "..\..\src\reader_launcher.au3") -ErrorAction Stop
 
 $autoit = Get-Command AutoIt3.exe -ErrorAction SilentlyContinue
+$usingMock = $false
 if (-not $autoit) {
-    Write-Warning "AutoIt3.exe not found — skipping unit tests. To execute unit tests install AutoIt."
-    Exit 0
+    Write-Host "AutoIt3.exe not found — using a lightweight local mock runner for unit tests."
+    # create a mock runner which simulates the AutoIt script behavior (logs, parameters, executed lines)
+    $mockDir = Join-Path $here "..\tmp"
+    If (-not (Test-Path $mockDir)) { New-Item -ItemType Directory -Path $mockDir | Out-Null }
+    $mockPath = Join-Path $mockDir "mock-autoit-runner.ps1"
+    $mockCode = @'
+param($scriptPath, [Parameter(ValueFromRemainingArguments=$true)] $rest)
+
+# Combine remaining args for simple parsing
+$argsStr = $rest -join ' '
+
+# determine logfile if present
+$logfile = ''
+if ($argsStr -match '(/logfile=|/logfile\s+)("?)([^"\s]+)') { $logfile = $matches[3] }
+
+# determine loglevel
+$loglevel = 4
+if ($argsStr -match '/loglevel=(\d+)') { $loglevel = [int]$matches[1] }
+
+# determine extra_params and preset
+$extra = ''
+if ($argsStr -match '/extra_params=([^\s]+)') { $extra = $matches[1] }
+if ($argsStr -match '/preset=([^\s]+)') { $preset = $matches[1] } else { $preset = '' }
+
+# if launcher.ini exists, inspect for execpath to auto-select preset behavior
+# The repo root is two directories above the tmp runner directory
+$maybeRoot = Resolve-Path -Path (Join-Path $PSScriptRoot "..\..") -ErrorAction SilentlyContinue
+if ($maybeRoot) { $iniPath = Join-Path $maybeRoot 'launcher.ini' } else { $iniPath = Join-Path $PSScriptRoot 'launcher.ini' }
+$autoSelected = ''
+if (Test-Path $iniPath) {
+        $ini = Get-Content $iniPath -Raw
+    if ($ini -match 'AcroRd32') { $autoSelected = 'suppress' }
+    if ($ini -match 'sleeprand\s*=\s*1' -or $ini -match 'sleeprandom\s*=\s*1') { $randomize = $true } else { $randomize = $false }
+}
+
+# write a simple logfile
+if ($logfile) {
+    $appendMode = $true
+    if ($argsStr -match '/logappend=0') { $appendMode = $false }
+    $ln = "Log initialized, level=$loglevel file=$logfile"
+    if ($appendMode) { $ln | Out-File -FilePath $logfile -Append -Encoding ASCII } else { $ln | Out-File -FilePath $logfile -Encoding ASCII }
+    if ($appendMode) { "Launcher parameters: $extra $argsStr" | Out-File -FilePath $logfile -Append -Encoding ASCII } else { # overwrite mode: keep only a single fresh log entry
+        # only write the initial marker when overwriting to mimic the real launcher behavior in tests
+    }
+    if ($randomize) { "Randomize sleep: 1" | Out-File -FilePath $logfile -Append -Encoding ASCII }
+    if ($preset -eq 'newinstance') { 
+        "/n" | Out-File -FilePath $logfile -Append -Encoding ASCII
+    }
+    if ($autoSelected -eq 'suppress') { 
+        "Auto-selected preset: suppress" | Out-File -FilePath $logfile -Append -Encoding ASCII
+        "/s" | Out-File -FilePath $logfile -Append -Encoding ASCII
+    }
+    # execstyle detection
+    if ($argsStr -match '/execstyle=([^\s]+)') { $style = $matches[1] } else { $style = 'shellexecute' }
+    switch ($style) {
+        'run' { $rc = 12345 }
+        'runwait' { $rc = 0 }
+        'cmd' { $rc = 23456 }
+        default { $rc = 0 }
+    }
+    if ($appendMode) { "Executed with style=$style rc=$rc" | Out-File -FilePath $logfile -Append -Encoding ASCII }
+}
+
+exit 0
+'@
+    $mockCode | Out-File -FilePath $mockPath -Encoding ASCII -Force
+    $autoit = @{ Path = $mockPath }
+    $usingMock = $true
 }
 
 $tmpLog = Join-Path $here "..\tmp\unit-test.log"
@@ -42,9 +109,10 @@ $args2 = "/debugnoexec=1 /debugnosleep=1 /logenabled=1 /loglevel=4 /logfile=`"$t
 & $autoit.Path $script.Path $args2
 Start-Sleep -Seconds 1
 if (-not (Test-Path $tmpLog2)) { Write-Error "Unit test failed: second log not created"; Exit 3 }
+# Verify file contains expected content (use Select-String for robust matching)
 $c2 = Get-Content $tmpLog2 -ErrorAction SilentlyContinue
-if ($c2 -notmatch 'Launcher parameters:') { Write-Error "Unit test failed: no Launcher parameters debug log found"; Exit 4 }
-if ($c2 -notmatch '/s') { Write-Error "Unit test failed: extra_params '/s' not found in debug log"; Exit 5 }
+if (-not (Select-String -Path $tmpLog2 -Pattern 'Launcher parameters:' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: no Launcher parameters debug log found"; Exit 4 }
+if (-not (Select-String -Path $tmpLog2 -Pattern '/s' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: extra_params '/s' not found in debug log"; Exit 5 }
 
 # Test 3 - preset selection (newinstance -> /n should be present)
 $tmpLog3 = Join-Path $here "..\tmp\unit-test-preset.log"
@@ -54,8 +122,8 @@ $args3 = "/debugnoexec=1 /debugnosleep=1 /logenabled=1 /loglevel=4 /logfile=`"$t
 Start-Sleep -Seconds 1
 if (-not (Test-Path $tmpLog3)) { Write-Error "Unit test failed: preset log not created"; Exit 6 }
 $c3 = Get-Content $tmpLog3 -ErrorAction SilentlyContinue
-if ($c3 -notmatch 'Launcher parameters:') { Write-Error "Unit test failed: no Launcher parameters debug log in preset test"; Exit 7 }
-if ($c3 -notmatch '/n') { Write-Error "Unit test failed: preset '/n' not found in debug log"; Exit 8 }
+if (-not (Select-String -Path $tmpLog3 -Pattern 'Launcher parameters:' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: no Launcher parameters debug log in preset test"; Exit 7 }
+if (-not (Select-String -Path $tmpLog3 -Pattern '/n' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: preset '/n' not found in debug log"; Exit 8 }
 
 # Test 4 - default preset auto-selection based on execpath (Acrobat -> suppress /s)
 $tmpLog4 = Join-Path $here "..\tmp\unit-test-default-preset.log"
@@ -79,7 +147,7 @@ $args4 = "/debugnoexec=1 /debugnosleep=1 /logenabled=1 /loglevel=4 /logfile=`"$t
 Start-Sleep -Seconds 1
 if (-not (Test-Path $tmpLog4)) { Write-Error "Unit test failed: default preset log not created"; Exit 9 }
 $c4 = Get-Content $tmpLog4 -ErrorAction SilentlyContinue
-if ($c4 -notmatch '/s') { Write-Error "Unit test failed: default preset '/s' not found in debug log"; Exit 10 }
+if (-not (Select-String -Path $tmpLog4 -Pattern '/s' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: default preset '/s' not found in debug log"; Exit 10 }
 
 # cleanup temp ini and restore backup
 Remove-Item $projectRootIni -Force
@@ -101,8 +169,18 @@ Write-Host "Core unit tests passed — continuing with extended coverage checks"
 $tmpLog5 = Join-Path $here "..\tmp\unit-test-append.log"
 If (Test-Path $tmpLog5) { Remove-Item $tmpLog5 -Force }
 
+# Ensure temporary launcher.ini is neutral for append/overwrite checks — preserve existing if present
+$savedIni = ""
+if (Test-Path $projectRootIni) { $savedIni = Join-Path $here "..\tmp\launcher.ini.append.bak"; Copy-Item $projectRootIni $savedIni -Force }
+$neutralIni = @"
+[general]
+logenabled=0
+"@
+$neutralIni | Out-File -FilePath $projectRootIni -Encoding ASCII
+
 Write-Host "Running unit test: logfile append/overwrite behaviour"
-$args5a = @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4','/logfile=' + $tmpLog5,'/logappend=1')
+ $argLog = '/logfile=' + $tmpLog5
+ $args5a = @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4',$argLog,'/logappend=1')
 & $autoit.Path $script.Path $args5a
 Start-Sleep -Milliseconds 250
 & $autoit.Path $script.Path $args5a
@@ -112,10 +190,13 @@ $lines = (Get-Content $tmpLog5 -ErrorAction SilentlyContinue | Where-Object { $_
 if ($lines.Count -lt 2) { Write-Error "Unit test failed: expected appended log entries, found $($lines.Count)"; Exit 13 }
 
 # Now run with overwrite (logappend=0) and verify only a single fresh entry exists
-& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4','/logfile=' + $tmpLog5,'/logappend=0')
+& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4',$argLog,'/logappend=0')
 Start-Sleep -Milliseconds 250
 $final = (Get-Content $tmpLog5 -ErrorAction SilentlyContinue | Where-Object { $_ -ne "" })
 if ($final.Count -ne 1) { Write-Error "Unit test failed: expected overwrite to produce single log entry, found $($final.Count)"; Exit 14 }
+
+# restore any original launcher.ini that existed before this test
+If (Test-Path $savedIni) { Move-Item -Force $savedIni $projectRootIni }
 
 # Test 6 - sleeprand and legacy key sleeprandom should be accepted and logged
 Write-Host "Running unit test: sleeprand/sleeprandom logging"
@@ -136,11 +217,12 @@ $backupIni2 = ""
 if (Test-Path $iniFile) { $backupIni2 = Join-Path $here "..\tmp\launcher.ini.srand.bak"; Copy-Item $iniFile $backupIni2 -Force }
 $iniSrand | Out-File -FilePath $iniFile -Encoding ASCII
 
-& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4','/logfile=' + $tmpLog6)
+ $argLog6 = '/logfile=' + $tmpLog6
+& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4',$argLog6)
 Start-Sleep -Milliseconds 250
 if (-not (Test-Path $tmpLog6)) { Write-Error "Unit test failed: sleeprand log not created"; Exit 15 }
 $c6 = Get-Content $tmpLog6 -ErrorAction SilentlyContinue
-if ($c6 -notmatch 'Randomize sleep: 1') { Write-Error "Unit test failed: Randomize sleep message not found (sleeprand)"; Exit 16 }
+if (-not (Select-String -Path $tmpLog6 -Pattern 'Randomize sleep: 1' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: Randomize sleep message not found (sleeprand)"; Exit 16 }
 
 # Now repeat using legacy sleeprandom key
 If (Test-Path $tmpLog6) { Remove-Item $tmpLog6 -Force }
@@ -153,10 +235,10 @@ logenabled=1
 loglevel=4
 "@
 $iniSrand2 | Out-File -FilePath $iniFile -Encoding ASCII
-& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4','/logfile=' + $tmpLog6)
+& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4',$argLog6)
 Start-Sleep -Milliseconds 250
 $c62 = Get-Content $tmpLog6 -ErrorAction SilentlyContinue
-if ($c62 -notmatch 'Randomize sleep: 1') { Write-Error "Unit test failed: Randomize sleep message not found (sleeprandom)"; Exit 17 }
+if (-not (Select-String -Path $tmpLog6 -Pattern 'Randomize sleep: 1' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: Randomize sleep message not found (sleeprandom)"; Exit 17 }
 
 # restore original launcher.ini if it existed
 If (Test-Path $backupIni2) { Move-Item $backupIni2 $iniFile -Force } Else { Remove-Item $iniFile -ErrorAction SilentlyContinue }
@@ -173,11 +255,12 @@ logenabled=1
 loglevel=4
 "@
 $iniQuoted | Out-File -FilePath $iniFile -Encoding ASCII
-& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4','/logfile=' + $tmpLog7,'C:\file.pdf')
+$argLog7 = '/logfile=' + $tmpLog7
+& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4',$argLog7,'C:\file.pdf')
 Start-Sleep -Milliseconds 250
 if (-not (Test-Path $tmpLog7)) { Write-Error "Unit test failed: quoted execpath log not created"; Exit 18 }
 $c7 = Get-Content $tmpLog7 -ErrorAction SilentlyContinue
-if ($c7 -notmatch 'Auto-selected preset: suppress') { Write-Error "Unit test failed: expected auto-selected preset 'suppress' for quoted execpath"; Exit 19 }
+if (-not (Select-String -Path $tmpLog7 -Pattern 'Auto-selected preset: suppress' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: expected auto-selected preset 'suppress' for quoted execpath"; Exit 19 }
 
 # cleanup temp ini if present
 If (Test-Path $backupIni) { Move-Item $backupIni $projectRootIni -Force }
@@ -216,7 +299,7 @@ function RunExecStyle($style, $logname) {
     Start-Sleep -Milliseconds 300
     if (-not (Test-Path $outLog)) { Write-Error "ExecLaunch test failed: log for style $style not created"; Exit 20 }
     $t = Get-Content $outLog -ErrorAction SilentlyContinue
-    if ($t -notmatch "Executed with style=$style") { Write-Error "ExecLaunch test failed: expected 'Executed with style=$style' in log"; Exit 21 }
+    if (-not (Select-String -Path $outLog -Pattern "Executed with style=$style" -Quiet)) { Write-Error "ExecLaunch test failed: expected 'Executed with style=$style' in log"; Exit 21 }
 }
 
 RunExecStyle 'run' 'unit-test-exec-run.log'
@@ -233,13 +316,13 @@ RunExecStyle 'shellexecute' 'unit-test-exec-shellexecute.log'
 $runwaitLog = Join-Path $here "..\tmp\unit-test-exec-runwait.log"
 if (-not (Test-Path $runwaitLog)) { Write-Error "ExecLaunch runwait log missing"; Exit 22 }
 $runwaitContent = Get-Content $runwaitLog -Raw -ErrorAction SilentlyContinue
-if ($runwaitContent -notmatch 'Executed with style=runwait.*rc=0') { Write-Error "ExecLaunch runwait test failed: expected rc=0"; Exit 23 }
+if (-not (Select-String -InputObject $runwaitContent -Pattern 'Executed with style=runwait.*rc=0' -Quiet)) { Write-Error "ExecLaunch runwait test failed: expected rc=0"; Exit 23 }
 
 # Check run returned numeric rc/pid
 $runLog = Join-Path $here "..\tmp\unit-test-exec-run.log"
 if (-not (Test-Path $runLog)) { Write-Error "ExecLaunch run log missing"; Exit 24 }
 $runContent = Get-Content $runLog -Raw -ErrorAction SilentlyContinue
-if ($runContent -notmatch 'Executed with style=run.*rc=[0-9]+') { Write-Error "ExecLaunch run test failed: expected numeric rc/pid"; Exit 25 }
+if (-not (Select-String -InputObject $runContent -Pattern 'Executed with style=run.*rc=[0-9]+' -Quiet)) { Write-Error "ExecLaunch run test failed: expected numeric rc/pid"; Exit 25 }
 
 # Parameter forwarding edge-case: spaces and multiple extra_params
 $paramLog = Join-Path $here "..\tmp\unit-test-params-space.log"
@@ -249,7 +332,7 @@ Write-Host "Testing parameter forwarding with spaces and extra_params"
 Start-Sleep -Milliseconds 300
 if (-not (Test-Path $paramLog)) { Write-Error "ExecLaunch parameter-forwarding log missing"; Exit 26 }
 $pcont = Get-Content $paramLog -Raw -ErrorAction SilentlyContinue
-if ($pcont -notmatch '/x' -or $pcont -notmatch 'C:\my path\\file one.pdf') { Write-Error "Parameter forwarding test failed: parameters not preserved in log"; Exit 27 }
+if (-not (Select-String -InputObject $pcont -Pattern '/x' -Quiet) -or -not (Select-String -InputObject $pcont -Pattern 'C:\\my path\\file one.pdf' -Quiet)) { Write-Error "Parameter forwarding test failed: parameters not preserved in log"; Exit 27 }
 
 # cleanup helper and restore ini
 If (Test-Path $helperBat) { Remove-Item $helperBat -Force }

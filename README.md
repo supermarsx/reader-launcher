@@ -128,6 +128,17 @@ CI workflows are split across `.github/workflows/` (lint.yml, format.yml, test.y
 
 Note: There used to be a combined `ci.yml` workflow in `.github/workflows/`. The repo now uses separated workflows (lint, format, test, build, release). The combined `ci.yml` has been deprecated and converted to a manual workflow to avoid duplicate automatic CI runs.
 
+### Release verification and strict gating
+
+The release workflow now performs several verification steps and publishes the results into the GitHub release body and as attached artifacts:
+
+- The build artifacts are attached to the release (non-UPX, UPX where available, and a zip package).
+- The release workflow runs an automated VirusTotal scan (when a `VIRUSTOTAL_API_KEY` secret is present) and attaches `vt_scan_summary.txt` to the release.
+- The `scripts/verify-release.ps1` helper is invoked for every artifact. It compares the artifact's SHA256/SHA512 hashes to `dist/checksums.txt` and optionally queries VirusTotal (when `VIRUSTOTAL_API_KEY` is present). The release workflow attaches `vt_verify_summary.txt` so you can review verification results.
+- Optionally enable strict verification to block the release if checksum verification fails or VirusTotal reports malicious/suspicious results. This is controlled by setting the repository secret `RELEASE_STRICT_VERIFY` to `true` or `1` in CI — when this secret is present the release step will abort on mismatches/detections.
+
+These changes aim to make release artifacts more transparent and easier to verify for project maintainers and downstream users.
+
 ### How to verify release artifacts locally (checksums and VirusTotal)
 
 When a release is produced the `dist/` folder contains compiled artifacts and a `checksums.txt` file with SHA256 and SHA512 hashes. You can verify an artifact you downloaded against the published checksums using PowerShell (Windows) or sha256sum/sha512sum on Unix-like systems.
