@@ -87,3 +87,12 @@ if (Test-Path $backupIni) { Move-Item $backupIni $projectRootIni -Force }
 
 Write-Host "All unit tests passed" -ForegroundColor Green
 Exit 0
+
+# Optional Test 5 - if dist exists (build ran in CI) check checksums file
+if (Test-Path (Join-Path $here "..\..\dist\checksums.txt")) {
+    Write-Host "Found checksums file in dist — verifying entries"
+    $checks = Get-Content (Join-Path $here "..\..\dist\checksums.txt")
+    if ($checks -notmatch 'reader_launcher.exe') { Write-Error "checksums.txt missing reader_launcher.exe"; Exit 11 }
+    if ($checks -notmatch 'reader_launcher-upx.exe') { Write-Warning "checksums.txt may be missing upx variant — OK on systems without UPX" }
+    Write-Host "Checksums file verified (basic check)."
+}

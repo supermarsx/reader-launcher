@@ -87,6 +87,13 @@ AutoIt binaries (and other small compiled utilities) can sometimes be flagged as
 
 The `scripts/` folder contains helper scripts for common development tasks (PowerShell). They are small, self-checking helpers that run on Windows / PowerShell:
 
+Specifically these scripts are provided:
+
+- `scripts/lint.ps1` — run au3check (if installed) against `reader_launcher.au3`.
+- `scripts/format.ps1` — runs an AutoIt formatter (if present) or prints guidance.
+- `scripts/test.ps1` — runs tests under `tests/` (`validate-config.ps1`, `autodiscovery-test.ps1`).
+- `scripts/build.ps1` — attempt to compile `reader_launcher.au3` into `dist\\reader_launcher.exe` using Aut2Exe if installed.
+
 
 Example quick checks (PowerShell):
 
@@ -98,6 +105,9 @@ pwsh -ExecutionPolicy Bypass -File scripts\build.ps1
 
 ## Development / Building
 
+- The AutoIt script is `reader_launcher.au3`. You can compile it using AutoIt3Wrapper (usually available from SciTE or the AutoIt tools).
+
+-- Make sure `launcher.ini` is present beside the compiled exe when testing.
 
 ### CI & contribution
 
