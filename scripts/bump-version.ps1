@@ -44,12 +44,16 @@ function Parse-Version($v) {
 }
 
 if ($Version -ne '') {
-    # Sanitize input: strip surrounding quotes, whitespace and optional 'v' prefix (e.g. "0.25.2" or v0.25.2)
+    # Sanitize input: trim whitespace and try to extract the first MAJOR.MINOR.PATCH sequence
     $Version = $Version.Trim()
+    # remove common surrounding quotes if present
     if ($Version.StartsWith('"') -and $Version.EndsWith('"')) { $Version = $Version.Trim('"') }
     if ($Version.StartsWith("'") -and $Version.EndsWith("'")) { $Version = $Version.Trim("'") }
-    if ($Version -match '^[vV](\d+\.\d+\.\d+)$') { $Version = $Matches[1] }
-    # validate form
+
+    # If value contains a version-like substring anywhere, extract it (handles "0.25.2", v0.25.2, or similar)
+    if ($Version -match '(\d+\.\d+\.\d+)') { $Version = $Matches[1] }
+
+    # validate final form
     if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { Write-Error "Invalid version format. Use MAJOR.MINOR.PATCH"; exit 1 }
     $new = $Version
 }
