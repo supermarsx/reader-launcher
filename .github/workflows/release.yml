@@ -51,8 +51,9 @@ jobs:
         env:
           TAG_NAME: ${{ steps.compute_tag.outputs.result }}
         run: |
-          echo "Setting version to $TAG_NAME"
-          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Version $TAG_NAME
+          # Avoid passing surrounding quotes into the script accidentally; print and pass the raw value
+          echo "Setting version to ${TAG_NAME//\"/}"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Version "${TAG_NAME//\"/}"
           git add version src/reader_launcher.au3 || true
           if ! git diff --cached --quiet; then
             git commit -m "chore(release): bump version to $TAG_NAME [skip ci]" || true
