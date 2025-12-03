@@ -71,7 +71,7 @@ jobs:
                 Invoke-WebRequest -Uri $u -OutFile $dest -UseBasicParsing -ErrorAction Stop -TimeoutSec 30
                 if (Test-Path $dest) { $wrapper = $dest; break }
               }
-              catch { Write-Host "Download attempt failed for $u: $($_.Exception.Message)" }
+              catch { Write-Host ("Download attempt failed for {0}: {1}" -f $u, $_.Exception.Message) }
             }
             if ($wrapper) { Write-Host "Downloaded AutoIt3Wrapper to: $wrapper" }
           }
