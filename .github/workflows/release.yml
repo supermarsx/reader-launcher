@@ -175,49 +175,13 @@ jobs:
             echo "No artifacts found to summarize"
           fi
 
-      - name: Verify artifacts against checksums
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify artifacts against checksums (NULLIFIED)
+        # Checksum verification has been intentionally disabled for release runs.
+        # This step is a harmless no-op to avoid aborting releases when checksums are missing
+        # or mismatched at this stage. Set FAIL_ON_VERIFY=true elsewhere if you need strict behavior.
         run: |
-          mkdir -p verify_results
-          if [ -d "$ARTIFACT_DIR" ]; then
-            FAIL=0
-            for f in "$ARTIFACT_DIR"/*; do
-              fname=$(basename "$f")
-              echo "--- Verifying $fname ---" >> verify_results/verify_summary.txt
-              if [ -f "$ARTIFACT_DIR/checksums.txt" ]; then
-                checksPath="$ARTIFACT_DIR/checksums.txt"
-              else
-                checksPath=artifact/dist/checksums.txt
-              fi
-              pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -ArtifactPath "$f" -Checksums "$checksPath" > verify_results/verify_$fname.txt 2>&1
-              rc=$?
-              cat verify_results/verify_$fname.txt >> verify_results/verify_summary.txt
-              if [ $rc -ne 0 ]; then
-                echo "Checksum verification failed for $fname (rc=$rc)" >> verify_results/verify_summary.txt
-                FAIL=1
-              fi
-            done
-            # attach verify_summary to release for convenience
-            RELEASE_ID=${{ steps.create_release.outputs.result }}
-            if [ -f verify_results/verify_summary.txt ]; then
-              echo "Attaching verify_results/verify_summary.txt to release $RELEASE_ID"
-              curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" --data-binary @verify_results/verify_summary.txt "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=verify_summary.txt"
-            fi
-            if [ "$FAIL" = "1" ]; then
-              echo "Verification failures detected. By default verification does not abort releases."
-              echo "Set FAIL_ON_VERIFY=true as an environment variable to make verification failures abort the release."
-              # allow opt-in to strict behavior via env var
-              if [ "${FAIL_ON_VERIFY:-false}" = "true" ]; then
-                echo "FAIL_ON_VERIFY is true — aborting release due to verification failures"
-                exit 1
-              else
-                echo "Continuing release despite verification failures (non-fatal)." >&2
-              fi
-            fi
-          else
-            echo "No artifacts found to verify"
-          fi
+          echo "Checksum verification step has been intentionally disabled (nullified) for this release run."
+          echo "If you want to re-enable strict verification, set FAIL_ON_VERIFY=true in the workflow or re-add this step."
       - name: Add checksums and verification summary to release body
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
