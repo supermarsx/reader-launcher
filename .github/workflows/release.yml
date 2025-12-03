@@ -52,16 +52,37 @@ jobs:
           TAG_NAME: ${{ steps.compute_tag.outputs.result }}
         run: |
           # Avoid passing surrounding quotes into the script accidentally; print and pass the raw value
-          echo "Setting version to ${TAG_NAME//\"/}"
-          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Version "${TAG_NAME//\"/}"
+          CLEAN_TAG=${TAG_NAME//\"/}
+          CLEAN_TAG=${CLEAN_TAG//\'/}
+          CLEAN_TAG=${CLEAN_TAG#v}
+          CLEAN_TAG=${CLEAN_TAG#V}
+          echo "Setting version to $CLEAN_TAG"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Version "$CLEAN_TAG"
           git add version src/reader_launcher.au3 || true
           if ! git diff --cached --quiet; then
             git commit -m "chore(release): bump version to $TAG_NAME [skip ci]" || true
           fi
 
+      - name: Normalize tag name for subsequent steps (strip quotes and leading v)
+        id: normalize_tag
+        shell: bash
+        env:
+          RAW_TAG: ${{ steps.compute_tag.outputs.result }}
+        run: |
+          # If TAG_NAME is provided by the environment (workflow_dispatch or external), prefer it
+          INPUT_TAG=${TAG_NAME:-$RAW_TAG}
+          # Remove surrounding double or single quotes
+          INPUT_TAG=${INPUT_TAG//\"/}
+          INPUT_TAG=${INPUT_TAG//\'/}
+          # Strip leading 'v' or 'V' if present
+          SANITIZED=${INPUT_TAG#v}
+          SANITIZED=${SANITIZED#V}
+          echo "Sanitized release tag: $SANITIZED"
+          echo "sanitized_tag=$SANITIZED" >> $GITHUB_OUTPUT
+
       - name: Tag & push release commit
         env:
-          TAG_NAME: ${{ steps.compute_tag.outputs.result }}
+          TAG_NAME: ${{ steps.normalize_tag.outputs.sanitized_tag }}
         run: |
           git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
           git push origin HEAD --follow-tags
@@ -73,7 +94,8 @@ jobs:
           script: |
             const owner = context.repo.owner
             const repo = context.repo.repo
-            const tag = process.env.TAG_NAME || '${{ steps.compute_tag.outputs.result }}'
+            // Prefer sanitized tag from previous step when present
+            const tag = process.env.TAG_NAME || '${{ steps.normalize_tag.outputs.sanitized_tag }}' || '${{ steps.compute_tag.outputs.result }}'
             core.info(`Creating release ${tag}`)
             const rel = await github.rest.repos.createRelease({ owner, repo, tag_name: tag, name: tag, body: `Automated release ${tag}`, draft: false, prerelease: false })
             return rel.data.id
