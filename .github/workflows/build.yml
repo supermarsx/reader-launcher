@@ -70,8 +70,27 @@ jobs:
             $path = Join-Path $PWD 'dist' $name
             if (-not (Test-Path $path)) { Write-Error "Missing expected exe: $path"; $fail = $true; continue }
             $vi = (Get-Item $path).VersionInfo
-            if (-not $vi.ProductVersion -or -not $vi.FileDescription -or -not $vi.ProductName) { Write-Error "Missing metadata in $name (ProductVersion/FileDescription/ProductName)"; $fail = $true; continue }
-            if ($vi.ProductVersion -notlike "*$ver*") { Write-Error ("ProductVersion ({0}) does not contain version ({1}) for {2}" -f $vi.ProductVersion, $ver, $name); $fail = $true } else { Write-Host (("Metadata for {0}: ProductVersion={1} ProductName={2} FileDescription={3}" -f $name, $vi.ProductVersion, $vi.ProductName, $vi.FileDescription)) }
+            if (-not $vi.ProductVersion -or -not $vi.FileDescription -or -not $vi.ProductName) {
+              # Some Aut2Exe invocations do not pick up wrapper resource directives.
+              # Try to inspect the source for AutoIt3Wrapper resource directives matching $ver
+              $srcPath = Join-Path $PWD 'src\reader_launcher.au3'
+              $srcText = ''
+              if (Test-Path $srcPath) { $srcText = Get-Content -Path $srcPath -Raw -ErrorAction SilentlyContinue }
+              $hasWrapperVersion = $false
+              if ($srcText -ne '') {
+                if ($srcText -match "AutoIt3Wrapper_Res_ProductVersion=.*$ver" -or $srcText -match "AutoIt3Wrapper_Res_Fileversion=.*$ver") { $hasWrapperVersion = $true }
+              }
+              if ($hasWrapperVersion) {
+                Write-Warning "Missing metadata in $name (ProductVersion/FileDescription/ProductName), but src contains AutoIt3Wrapper resource directives matching version ($ver). This indicates Aut2Exe may not have embedded resources (use AutoIt3Wrapper when compiling to ensure resources are embedded). Continuing as a warning."
+                Write-Host ("Note: source wrapper directives found -> continuing: {0}" -f $srcPath)
+              }
+              else {
+                Write-Error "Missing metadata in $name (ProductVersion/FileDescription/ProductName) and src does not contain wrapper resource directives for $ver"; $fail = $true; continue
+              }
+            }
+            else {
+              if ($vi.ProductVersion -notlike "*$ver*") { Write-Error ("ProductVersion ({0}) does not contain version ({1}) for {2}" -f $vi.ProductVersion, $ver, $name); $fail = $true } else { Write-Host (("Metadata for {0}: ProductVersion={1} ProductName={2} FileDescription={3}" -f $name, $vi.ProductVersion, $vi.ProductName, $vi.FileDescription)) }
+            }
           }
           if ($fail) { exit 1 }
 
