@@ -39,9 +39,9 @@ jobs:
             if (-not (Test-Path $path)) { Write-Error "Missing expected exe: $path"; $fail = $true; continue }
             try {
               $ico = [System.Drawing.Icon]::ExtractAssociatedIcon($path)
-              if (-not $ico) { Write-Error "No icon found in $name"; $fail = $true } else { Write-Host "Icon found in $name (size=$($ico.Size))" }
+              if (-not $ico) { Write-Error ("No icon found in {0}" -f $name); $fail = $true } else { Write-Host (("Icon found in {0} (size={1})" -f $name, $ico.Size)) }
             } catch {
-              Write-Error "Failed to extract icon from $name: $($_.Exception.Message)"; $fail = $true
+              Write-Error ("Failed to extract icon from {0}: {1}" -f $name, $_.Exception.Message); $fail = $true
             }
           }
           if ($fail) { exit 1 }

@@ -100,7 +100,8 @@ try {
 
     # remove temp log on success
     if (Test-Path $tempLog) { Remove-Item $tempLog -Force -ErrorAction SilentlyContinue }
-} catch {
+}
+catch {
     Write-Error "Aut2Exe invocation failed: $($_.Exception.Message)"
     if ($tempLog -and (Test-Path $tempLog)) { Write-Host "Aut2Exe log:"; Get-Content $tempLog | ForEach-Object { Write-Host "  $_" } }
     Exit 1
@@ -128,12 +129,14 @@ if ($upx) {
     try {
         if ($upx -is [string]) { & "$upx" "$out_upx" *>&1 | Tee-Object -FilePath ([IO.Path]::GetTempFileName() + '.upx.log') }
         else { & "$($upx.Path)" "$out_upx" *>&1 | Tee-Object -FilePath ([IO.Path]::GetTempFileName() + '.upx.log') }
-    } catch {
+    }
+    catch {
         Write-Warning "UPX invocation failed: $($_.Exception.Message) -- falling back to copying the primary EXE"
         # On failure ensure we have a non-compressed artifact at the -upx filename
         Copy-Item -Path $out -Destination $out_upx -Force
     }
-} else {
+}
+else {
     Write-Host "UPX not found; creating an identical copy for $out_upx"
     Copy-Item -Path $out -Destination $out_upx -Force
 }
@@ -151,7 +154,7 @@ if (Test-Path $zipName) { Remove-Item $zipName -Force }
 Compress-Archive -Path $tmpFiles -DestinationPath $zipName -Force
 
 # Build a second zip that contains the UPX variant (or the copied -upx file)
- $tmpFilesUpx = @()
+$tmpFilesUpx = @()
 $tmpFilesUpx += $out_upx
 if ($icon) { $tmpFilesUpx += $icon }
 if (Test-Path $exampleIni) { $tmpFilesUpx += $exampleIni }
