@@ -8,8 +8,8 @@
 # Application metadata (embedded into compiled binary via AutoIt3Wrapper)
 # AutoIt3Wrapper resource directives
 # NOTE: update these when bumping the release version
-#AutoIt3Wrapper_Res_Fileversion=0.25.1.0
-#AutoIt3Wrapper_Res_ProductVersion=0.25.1.0
+$10.25.1.0
+$10.25.1.0
 #AutoIt3Wrapper_Res_ProductName=reader-launcher
 #AutoIt3Wrapper_Res_FileDescription=A small robust launcher for PDF viewers
 #AutoIt3Wrapper_Res_Company=supermarsx
@@ -613,6 +613,7 @@ Func GetPresetParams($name)
 		Return ""
 	EndIf
 EndFunc   ;==>GetPresetParams
+
 
 
 
