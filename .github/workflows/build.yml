@@ -17,6 +17,17 @@ jobs:
       - name: Install UPX via Chocolatey
         run: choco install upx -y
 
+      - name: Ensure AutoIt3Wrapper exists (required for console-capable builds)
+        shell: pwsh
+        run: |
+          $wrapper = Get-Command AutoIt3Wrapper -ErrorAction SilentlyContinue
+          if (-not $wrapper) {
+            $candidates = @("C:\\Program Files (x86)\\AutoIt3\\AutoIt3Wrapper\\AutoIt3Wrapper.exe","C:\\Program Files\\AutoIt3\\AutoIt3Wrapper\\AutoIt3Wrapper.exe","C:\\Program Files (x86)\\AutoIt3\\AutoIt3Wrapper.exe","C:\\Program Files\\AutoIt3\\AutoIt3Wrapper.exe")
+            foreach ($p in $candidates) { if (Test-Path $p) { $wrapper = $p; break } }
+          }
+          if (-not $wrapper) { Write-Error "AutoIt3Wrapper not found on runner. Please install AutoIt3Wrapper or ensure AutoIt is installed with AutoIt3Wrapper support. Aborting to ensure console-capable EXEs are built."; exit 1 }
+          Write-Host "Found AutoIt3Wrapper: $wrapper"
+
       - name: Run build script
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\build.ps1
 

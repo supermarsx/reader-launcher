@@ -6,8 +6,8 @@ Project layout: source code now lives in `src/` and application assets (icons/im
 
 If there is no `launcher.ini` present, the launcher will use built-in defaults and automatically enable autodiscovery to try and find a suitable PDF viewer. The autodiscovery logic now checks:
 
-- Registry App Paths for `AcroRd32.exe` and `Acrobat.exe`
-- Known Program Files locations (including `Adobe\Acrobat DC\Acrobat\Acrobat.exe` and the x86 variant)
+- Registry App Paths for `AcroRd32.exe`, `Acrobat.exe`, `FoxitReader.exe`, `FoxitPDFEditor.exe`, and `NitroPDF.exe`
+- Known Program Files locations (including `Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe`, Nitro and Foxit install locations and the x86 variants)
 - Installer registry keys used by Acrobat (`HKLM\SOFTWARE\Adobe\Adobe Acrobat\DC\Installer\SCAPackageLevel` and the WOW6432Node equivalent) — when detected, the build will also probe likely Acrobat DC install paths.
 
 Create `launcher.ini` by copying `launcher.example.ini` and editing values for your machine when you want persistent configuration.

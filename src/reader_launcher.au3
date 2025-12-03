@@ -500,8 +500,22 @@ Func AutoDiscoverExecPath(ByRef $sources)
 				EndIf
 				; also check for Acrobat.exe AppPaths
 				Local $r3 = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\Acrobat.exe", "")
+				Local $r3 = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\Acrobat.exe", "")
 				If @error = 0 And StringLen($r3) Then
 					If FileExists($r3) Then Return $r3
+				EndIf
+				; Check App Paths for Nitro and Foxit variations as well
+				Local $r5 = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\NitroPDF.exe", "")
+				If @error = 0 And StringLen($r5) Then
+					If FileExists($r5) Then Return $r5
+				EndIf
+				Local $r6 = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\FoxitReader.exe", "")
+				If @error = 0 And StringLen($r6) Then
+					If FileExists($r6) Then Return $r6
+				EndIf
+				Local $r7 = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\FoxitPDFEditor.exe", "")
+				If @error = 0 And StringLen($r7) Then
+					If FileExists($r7) Then Return $r7
 				EndIf
 				Local $r4 = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\App Paths\Acrobat.exe", "")
 				If @error = 0 And StringLen($r4) Then
@@ -509,9 +523,21 @@ Func AutoDiscoverExecPath(ByRef $sources)
 				EndIf
 				; If installer keys exist for Acrobat DC (SCAPackageLevel) the product is installed; try common Acrobat DC path
 				Local $inst1 = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Adobe\Adobe Acrobat\DC\Installer", "SCAPackageLevel")
+				Local $inst1 = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Adobe\Adobe Acrobat\DC\Installer", "SCAPackageLevel")
 				If @error = 0 And StringLen($inst1) Then
 					Local $candidate = @ProgramFilesDir & "\Adobe\Acrobat DC\Acrobat\Acrobat.exe"
 					If FileExists($candidate) Then Return $candidate
+				EndIf
+				; Also check Nitro/Foxit installer registry keys (common installer locations)
+				Local $nitroReg = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Nitro\Pro", "InstallDir")
+				If @error = 0 And StringLen($nitroReg) Then
+					Local $candn = $nitroReg & "\NitroPDF.exe"
+					If FileExists($candn) Then Return $candn
+				EndIf
+				Local $foxitReg = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\FoxitSoftware\FoxitReader", "InstallPath")
+				If @error = 0 And StringLen($foxitReg) Then
+					Local $candf = $foxitReg & "\FoxitReader.exe"
+					If FileExists($candf) Then Return $candf
 				EndIf
 				Local $inst2 = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Adobe\Adobe Acrobat\DC\Installer", "SCAPackageLevel")
 				If @error = 0 And StringLen($inst2) Then

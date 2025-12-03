@@ -24,6 +24,22 @@ Try {
 } Catch { }
 
 Try {
+    $rNitro = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Nitro\Pro' -ErrorAction SilentlyContinue
+    if ($rNitro -and $rNitro.InstallDir) {
+        $cand = Join-Path $rNitro.InstallDir 'NitroPDF.exe'
+        if (Test-Path $cand) { $found += $cand }
+    }
+} Catch { }
+
+Try {
+    $rFoxit = Get-ItemProperty -Path 'HKLM:\SOFTWARE\FoxitSoftware\FoxitReader' -ErrorAction SilentlyContinue
+    if ($rFoxit -and $rFoxit.InstallPath) {
+        $cand = Join-Path $rFoxit.InstallPath 'FoxitReader.exe'
+        if (Test-Path $cand) { $found += $cand }
+    }
+} Catch { }
+
+Try {
     $inst = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Adobe\Adobe Acrobat\DC\Installer' -ErrorAction SilentlyContinue
     If ($inst -and $inst.SCAPackageLevel) {
         $cand = "$env:ProgramFiles\Adobe\Acrobat DC\Acrobat\Acrobat.exe"
@@ -52,7 +68,13 @@ $candidates = @(
     "$env:ProgramFiles(x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
     "$env:ProgramFiles(x86)\Adobe\Acrobat\Acrobat.exe",
     "$env:ProgramFiles(x86)\Adobe\Acrobat DC\Acrobat\Acrobat.exe",
-    "$env:ProgramFiles(x86)\SumatraPDF\SumatraPDF.exe"
+    "$env:ProgramFiles(x86)\SumatraPDF\SumatraPDF.exe",
+    "$env:ProgramFiles\Nitro\Pro\NitroPDF.exe",
+    "$env:ProgramFiles(x86)\Nitro\Pro\NitroPDF.exe",
+    "$env:ProgramFiles\Foxit Software\Foxit PDF Editor\FoxitPDFEditor.exe",
+    "$env:ProgramFiles\Foxit Software\Foxit Reader\FoxitReader.exe",
+    "$env:ProgramFiles(x86)\Foxit Software\Foxit PDF Editor\FoxitPDFEditor.exe",
+    "$env:ProgramFiles(x86)\Foxit Software\Foxit Reader\FoxitReader.exe"
 )
 
 foreach ($c in $candidates) {
