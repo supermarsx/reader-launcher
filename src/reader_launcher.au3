@@ -8,8 +8,8 @@
 # Application metadata (embedded into compiled binary via AutoIt3Wrapper)
 # AutoIt3Wrapper resource directives
 # NOTE: update these when bumping the release version
-$10.25.2.0
-$10.25.2.0
+#AutoIt3Wrapper_Res_Fileversion=0.25.1.0
+#AutoIt3Wrapper_Res_ProductVersion=0.25.1.0
 #AutoIt3Wrapper_Res_ProductName=reader-launcher
 #AutoIt3Wrapper_Res_FileDescription=A small robust launcher for PDF viewers
 #AutoIt3Wrapper_Res_Company=supermarsx
@@ -52,7 +52,7 @@ $10.25.2.0
 ; Global Configurations
 ; Application metadata (also visible via CLI)
 Global Const $APP_NAME = "reader-launcher"
-Global Const $APP_VERSION = "0.25.2"
+Global Const $APP_VERSION = "0.25.1"
 
 ; Global Configurations
 Global $cfg_filename = @ScriptDir & "\..\launcher.ini", _
