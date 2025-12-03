@@ -8,8 +8,8 @@
 # Application metadata (embedded into compiled binary via AutoIt3Wrapper)
 # AutoIt3Wrapper resource directives
 # NOTE: update these when bumping the release version
-#AutoIt3Wrapper_Res_Fileversion=0.25.2.0
-#AutoIt3Wrapper_Res_ProductVersion=0.25.2.0
+$10.25.2.0
+$10.25.2.0
 #AutoIt3Wrapper_Res_ProductName=reader-launcher
 #AutoIt3Wrapper_Res_FileDescription=A small robust launcher for PDF viewers
 #AutoIt3Wrapper_Res_Company=supermarsx
@@ -92,7 +92,7 @@ Local $raw_autodiscover_persist = IniRead($cfg_filename, $cfg_section1, "autodis
 ; Extra params and presets
 Local $raw_extra_params = IniRead($cfg_filename, $cfg_section1, "extra_params", "")
 Local $raw_preset = IniRead($cfg_filename, $cfg_section1, "preset", "")
-; Console mode preference in ini (0/1) — when set, the launcher behaves as console
+; Console mode preference in ini (0/1) ? when set, the launcher behaves as console
 Local $raw_console = IniRead($cfg_filename, $cfg_section1, "console", 0)
 Local $cfg_console = Int($raw_console)
 
@@ -613,4 +613,5 @@ Func GetPresetParams($name)
 		Return ""
 	EndIf
 EndFunc   ;==>GetPresetParams
+
 
