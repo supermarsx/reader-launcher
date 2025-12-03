@@ -52,7 +52,7 @@ $10.25.2.0
 ; Global Configurations
 ; Application metadata (also visible via CLI)
 Global Const $APP_NAME = "reader-launcher"
-Global Const $APP_VERSION = "0.25.2"
+Global Const $APP_VERSION = "0.25.1"
 
 ; Global Configurations
 Global $cfg_filename = @ScriptDir & "\..\launcher.ini", _
@@ -613,6 +613,7 @@ Func GetPresetParams($name)
 		Return ""
 	EndIf
 EndFunc   ;==>GetPresetParams
+
 
 
 
