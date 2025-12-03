@@ -72,25 +72,43 @@ try {
         $ico = Get-ChildItem -Path $assetsDir -Filter *.ico -File -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($ico) { $icon = $ico.FullName; Write-Host "Found icon to embed: $icon" -ForegroundColor Cyan }
     }
+    # Prefer AutoIt3Wrapper (when present) so wrapper directives like UseConsole are honored.
+    $wrapper = Get-Command AutoIt3Wrapper -ErrorAction SilentlyContinue
+    if (-not $wrapper) {
+        $wrapperCandidates = @( 
+            "C:\\Program Files (x86)\\AutoIt3\\AutoIt3Wrapper\\AutoIt3Wrapper.exe",
+            "C:\\Program Files\\AutoIt3\\AutoIt3Wrapper\\AutoIt3Wrapper.exe",
+            "C:\\Program Files (x86)\\AutoIt3\\AutoIt3Wrapper.exe",
+            "C:\\Program Files\\AutoIt3\\AutoIt3Wrapper.exe"
+        )
+        foreach ($p in $wrapperCandidates) { if (Test-Path $p) { $wrapper = $p; break } }
+    }
+
     # Run Aut2Exe once and capture output in a temp log for diagnostics.
     $tempLog = [IO.Path]::GetTempFileName() + '.aut2exe.log'
     Write-Host "Aut2Exe command: $aut2exe" -ForegroundColor Cyan
     Write-Host "Capturing Aut2Exe output in: $tempLog"
-    # if we found an icon, pass /icon argument to Aut2Exe; otherwise omit it
-    if ($icon) {
-        if ($aut2exe -is [string]) {
-            & "$aut2exe" /in "$src" /out "$out" /icon "$icon" *>&1 | Tee-Object -FilePath $tempLog
+    # If AutoIt3Wrapper is present prefer it so wrapper directives (e.g., UseConsole) are respected.
+    if ($wrapper) {
+        Write-Host "Using AutoIt3Wrapper for compilation: $wrapper" -ForegroundColor Cyan
+        if ($icon) {
+            if ($wrapper -is [string]) { & "$wrapper" /in "$src" /out "$out" /icon "$icon" *>&1 | Tee-Object -FilePath $tempLog }
+            else { & "$($wrapper.Path)" /in "$src" /out "$out" /icon "$icon" *>&1 | Tee-Object -FilePath $tempLog }
         }
         else {
-            & "$($aut2exe.Path)" /in "$src" /out "$out" /icon "$icon" *>&1 | Tee-Object -FilePath $tempLog
+            if ($wrapper -is [string]) { & "$wrapper" /in "$src" /out "$out" *>&1 | Tee-Object -FilePath $tempLog }
+            else { & "$($wrapper.Path)" /in "$src" /out "$out" *>&1 | Tee-Object -FilePath $tempLog }
         }
     }
     else {
-        if ($aut2exe -is [string]) {
-            & "$aut2exe" /in "$src" /out "$out" *>&1 | Tee-Object -FilePath $tempLog
+        # fallback to direct Aut2Exe invocation
+        if ($icon) {
+            if ($aut2exe -is [string]) { & "$aut2exe" /in "$src" /out "$out" /icon "$icon" *>&1 | Tee-Object -FilePath $tempLog }
+            else { & "$($aut2exe.Path)" /in "$src" /out "$out" /icon "$icon" *>&1 | Tee-Object -FilePath $tempLog }
         }
         else {
-            & "$($aut2exe.Path)" /in "$src" /out "$out" *>&1 | Tee-Object -FilePath $tempLog
+            if ($aut2exe -is [string]) { & "$aut2exe" /in "$src" /out "$out" *>&1 | Tee-Object -FilePath $tempLog }
+            else { & "$($aut2exe.Path)" /in "$src" /out "$out" *>&1 | Tee-Object -FilePath $tempLog }
         }
     }
 

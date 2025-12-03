@@ -3,6 +3,8 @@
 #AutoIt3Wrapper_Icon=..\assets\adobe_reader_logo.ico
 #AutoIt3Wrapper_Outfile=reader_launcher.exe
 #AutoIt3Wrapper_UseUpx=y
+# Ensure compiled binary emits console output when wrapped by AutoIt3Wrapper
+#AutoIt3Wrapper_UseConsole=1
 # Application metadata (embedded into compiled binary via AutoIt3Wrapper)
 # AutoIt3Wrapper resource directives
 # NOTE: update these when bumping the release version
@@ -145,7 +147,10 @@ Local $g_hasConsole = False
 Local $dllRet = DllCall("kernel32.dll", "ptr", "GetConsoleWindow")
 If @error = 0 And IsArray($dllRet) And $dllRet[0] <> 0 Then $g_hasConsole = True
 ; If the INI requests console mode, honor it (overrides absence of console window)
-If $cfg_console = 1 Then $g_hasConsole = True
+If $cfg_console = 1 Then
+	$g_hasConsole = True
+	_AttachConsoleToParent()
+EndIf
 
 ; run early CLI checks for --help / --version before potentially sleeping
 _CheckForHelpAndVersion()
@@ -164,6 +169,7 @@ Func _CheckForHelpAndVersion()
 		; support forcing console mode via --console or -c
 		If $a = "--console" Or $a = "-c" Then
 			$g_hasConsole = True
+			_AttachConsoleToParent()
 			ContinueLoop
 		EndIf
 		If $a = "--help" Or $a = "-h" Or $a = "/?" Or $a = "/help" Or $a = "/h" Then
@@ -178,6 +184,8 @@ EndFunc   ;==>_CheckForHelpAndVersion
 
 Func _ShowUsage()
 	If $g_hasConsole Then
+		; ensure we have a console attached so ConsoleWrite actually writes to stdout
+		_AttachConsoleToParent()
 		ConsoleWrite($APP_NAME & " " & $APP_VERSION & @CRLF)
 		ConsoleWrite("Usage: " & $APP_NAME & " [options] [file(s)]" & @CRLF)
 		ConsoleWrite(@CRLF)
@@ -194,6 +202,8 @@ EndFunc   ;==>_ShowUsage
 
 Func _ShowVersion()
 	If $g_hasConsole Then
+		; ensure we have a console attached so ConsoleWrite actually writes to stdout
+		_AttachConsoleToParent()
 		ConsoleWrite($APP_NAME & " " & $APP_VERSION & @CRLF)
 	Else
 		MsgBox(0, $APP_NAME & ' ' & $APP_VERSION, 'Version: ' & $APP_VERSION)
@@ -299,6 +309,24 @@ Func debug($message)
 	; also write debug messages to log if enabled and loglevel >= debug
 	_WriteLog("debug", $message)
 EndFunc   ;==>debug
+
+; Attach to parent console if possible, otherwise allocate a new console.
+; Returns True when a console is available after this call.
+Func _AttachConsoleToParent()
+	; If already have a console window, nothing to do
+	Local $dllRet = DllCall("kernel32.dll", "ptr", "GetConsoleWindow")
+	If @error = 0 And IsArray($dllRet) And $dllRet[0] <> 0 Then Return True
+
+	; Try to attach to parent process console (ATTACH_PARENT_PROCESS = -1)
+	Local $attach = DllCall("kernel32.dll", "int", "AttachConsole", "int", -1)
+	If @error = 0 And IsArray($attach) And $attach[0] <> 0 Then Return True
+
+	; Fallback: allocate a new console (AllocConsole)
+	Local $alloc = DllCall("kernel32.dll", "int", "AllocConsole")
+	If @error = 0 And IsArray($alloc) And $alloc[0] <> 0 Then Return True
+
+	Return False
+EndFunc   ;==>_AttachConsoleToParent
 
 ; ---------------- helper utilities ----------------
 ; _EnsureLogDirExists(path) ? ensure the folder for the given file path exists.
@@ -459,7 +487,7 @@ Func AutoDiscoverExecPath(ByRef $sources)
 	For $s = 1 To $sources[0]
 		Local $src = StringLower(StringStripWS($sources[$s], 3))
 		Switch $src
-			Case "registry"
+	 		Case "registry"
 				; check App Paths for AcroRd32.exe (explicit keys read below)
 				; try known AppPaths keys
 				Local $r = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\AcroRd32.exe", "")
@@ -470,9 +498,30 @@ Func AutoDiscoverExecPath(ByRef $sources)
 				If @error = 0 And StringLen($r2) Then
 					If FileExists($r2) Then Return $r2
 				EndIf
+				; also check for Acrobat.exe AppPaths
+				Local $r3 = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\Acrobat.exe", "")
+				If @error = 0 And StringLen($r3) Then
+					If FileExists($r3) Then Return $r3
+				EndIf
+				Local $r4 = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\App Paths\Acrobat.exe", "")
+				If @error = 0 And StringLen($r4) Then
+					If FileExists($r4) Then Return $r4
+				EndIf
+				; If installer keys exist for Acrobat DC (SCAPackageLevel) the product is installed; try common Acrobat DC path
+				Local $inst1 = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Adobe\Adobe Acrobat\DC\Installer", "SCAPackageLevel")
+				If @error = 0 And StringLen($inst1) Then
+					Local $candidate = @ProgramFilesDir & "\Adobe\Acrobat DC\Acrobat\Acrobat.exe"
+					If FileExists($candidate) Then Return $candidate
+				EndIf
+				Local $inst2 = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Adobe\Adobe Acrobat\DC\Installer", "SCAPackageLevel")
+				If @error = 0 And StringLen($inst2) Then
+					Local $candidate2 = @ProgramFilesDir & "(x86)\Adobe\Acrobat DC\Acrobat\Acrobat.exe"
+					$candidate2 = StringReplace($candidate2, "(x86)", "Program Files (x86)")
+					If FileExists($candidate2) Then Return $candidate2
+				EndIf
 			Case "programfiles", "programfilesx86", "programfilesx64"
 				; check common locations ? order: Program Files (x86) and Program Files
-				Local $candList = @ProgramFilesDir & "\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe|" & @ProgramFilesDir & "\Adobe\Acrobat\Acrobat.exe|" & @ProgramFilesDir & "\SumatraPDF\SumatraPDF.exe|" & @ProgramFilesDir & "(x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe|" & @ProgramFilesDir & "(x86)\Adobe\Acrobat\Acrobat.exe|" & @ProgramFilesDir & "(x86)\SumatraPDF\SumatraPDF.exe"
+				Local $candList = @ProgramFilesDir & "\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe|" & @ProgramFilesDir & "\Adobe\Acrobat DC\Acrobat\Acrobat.exe|" & @ProgramFilesDir & "\Adobe\Acrobat\Acrobat.exe|" & @ProgramFilesDir & "\SumatraPDF\SumatraPDF.exe|" & @ProgramFilesDir & "(x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe|" & @ProgramFilesDir & "(x86)\Adobe\Acrobat DC\Acrobat\Acrobat.exe|" & @ProgramFilesDir & "(x86)\Adobe\Acrobat\Acrobat.exe|" & @ProgramFilesDir & "(x86)\SumatraPDF\SumatraPDF.exe"
 				Local $candidates = StringSplit($candList, "|", 2)
 				For $c = 1 To $candidates[0]
 					Local $path = $candidates[$c]

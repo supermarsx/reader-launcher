@@ -24,6 +24,22 @@ Try {
 } Catch { }
 
 Try {
+    $inst = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Adobe\Adobe Acrobat\DC\Installer' -ErrorAction SilentlyContinue
+    If ($inst -and $inst.SCAPackageLevel) {
+        $cand = "$env:ProgramFiles\Adobe\Acrobat DC\Acrobat\Acrobat.exe"
+        If (Test-Path $cand) { $found += $cand }
+    }
+} Catch { }
+
+Try {
+    $inst2 = Get-ItemProperty -Path 'HKLM:\SOFTWARE\WOW6432Node\Adobe\Adobe Acrobat\DC\Installer' -ErrorAction SilentlyContinue
+    If ($inst2 -and $inst2.SCAPackageLevel) {
+        $cand = "$env:ProgramFiles(x86)\Adobe\Acrobat DC\Acrobat\Acrobat.exe"
+        If (Test-Path $cand) { $found += $cand }
+    }
+} Catch { }
+
+Try {
     $r2 = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\App Paths\AcroRd32.exe' -ErrorAction SilentlyContinue
     If ($r2 -and $r2.'') { $found += $r2.'' }
 } Catch { }
@@ -31,9 +47,11 @@ Try {
 $candidates = @(
     "$env:ProgramFiles\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
     "$env:ProgramFiles\Adobe\Acrobat\Acrobat.exe",
+    "$env:ProgramFiles\Adobe\Acrobat DC\Acrobat\Acrobat.exe",
     "$env:ProgramFiles\SumatraPDF\SumatraPDF.exe",
     "$env:ProgramFiles(x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
     "$env:ProgramFiles(x86)\Adobe\Acrobat\Acrobat.exe",
+    "$env:ProgramFiles(x86)\Adobe\Acrobat DC\Acrobat\Acrobat.exe",
     "$env:ProgramFiles(x86)\SumatraPDF\SumatraPDF.exe"
 )
 
