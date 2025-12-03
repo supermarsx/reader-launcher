@@ -81,16 +81,16 @@ Note: The launcher accepts both `sleeprand` and historic key `sleeprandom` in ca
 
 ### ⚠️ Note about compiled AutoIt binaries, release artifacts and anti‑virus checks
 
-AutoIt binaries (and other small compiled utilities) can sometimes be flagged as false positives by anti‑malware scanners because of the way AutoIt packs and compiles scripts. This project is small and safe — if a compiled executable is flagged, upload the binary to a trusted scanner (like VirusTotal) and/or add an exception in your environment.
+AutoIt binaries (and other small compiled utilities) can sometimes be flagged as false positives by anti‑malware scanners because of the way AutoIt packs and compiles scripts. This project is small and safe — if a compiled executable is flagged, upload the binary to a trusted scanner and/or add an exception in your environment.
 
 When we publish releases the build workflow produces multiple artifacts and metadata to assist with verification and diagnosing AV detection:
 
 - A non-UPX compiled binary `reader_launcher.exe` (unpacked)
 - An UPX-compressed binary `reader_launcher-upx.exe` (when UPX is available on the build runner)
 - A zip package containing `reader_launcher.exe` and `launcher.example.ini` (ready for download and testing)
-- A `checksums.txt` file in the `dist/` artifacts folder containing SHA256 and SHA512 hashes for every artifact (useful to verify downloads and to cross-check on scanners like VirusTotal)
+- A `checksums.txt` file in the `dist/` artifacts folder containing SHA256 and SHA512 hashes for every artifact (useful to verify downloads and for auditability)
 
-Additionally, the release workflow will attempt an automated VirusTotal scan when a `VIRUSTOTAL_API_KEY` secret is provided to the CI. If an API key is not available the workflow will still include GUI detection links you can use to manually inspect each artifact on VirusTotal.
+The release workflow performs checksum verification for attached artifacts and publishes verification summaries to the release so maintainers can quickly validate artifacts.
 
 ## Scripts (lint / format / test / build)
 
@@ -103,7 +103,7 @@ Specifically these scripts are provided:
 - `scripts/test.ps1` — runs tests under `tests/` (`validate-config.ps1`, `autodiscovery-test.ps1`).
 - `scripts/build.ps1` — attempt to compile `reader_launcher.au3` into `dist\\reader_launcher.exe` using Aut2Exe if installed.
 - `scripts/build.ps1` — attempt to compile `reader_launcher.au3` into `dist\\reader_launcher.exe` using Aut2Exe if installed.
-- `scripts/verify-release.ps1` — helper to verify downloaded artifacts against `dist/checksums.txt` and optionally query VirusTotal (see scripts header for usage).
+- `scripts/verify-release.ps1` — helper to verify downloaded artifacts against `dist/checksums.txt` (checksums-only verification).
 
 
 Example quick checks (PowerShell):
@@ -130,16 +130,14 @@ Note: There used to be a combined `ci.yml` workflow in `.github/workflows/`. The
 
 ### Release verification and strict gating
 
-The release workflow now performs several verification steps and publishes the results into the GitHub release body and as attached artifacts:
+The release workflow now performs verification steps and publishes concise verification results into the GitHub release body and as attached artifacts:
 
-- The build artifacts are attached to the release (non-UPX, UPX where available, and a zip package).
-- The release workflow runs an automated VirusTotal scan (when a `VIRUSTOTAL_API_KEY` secret is present) and attaches `vt_scan_summary.txt` to the release.
-- The `scripts/verify-release.ps1` helper is invoked for every artifact. It compares the artifact's SHA256/SHA512 hashes to `dist/checksums.txt` and optionally queries VirusTotal (when `VIRUSTOTAL_API_KEY` is present). The release workflow attaches `vt_verify_summary.txt` so you can review verification results.
-- Optionally enable strict verification to block the release if checksum verification fails or VirusTotal reports malicious/suspicious results. This is controlled by setting the repository secret `RELEASE_STRICT_VERIFY` to `true` or `1` in CI — when this secret is present the release step will abort on mismatches/detections.
+- The build artifacts are attached to the release (non-UPX, UPX where available, and zip packages).
+- The `scripts/verify-release.ps1` helper is invoked for every artifact. It compares the artifact's SHA256/SHA512 hashes to `dist/checksums.txt`. The release workflow attaches a verification summary so you can review results.
 
 These changes aim to make release artifacts more transparent and easier to verify for project maintainers and downstream users.
 
-### How to verify release artifacts locally (checksums and VirusTotal)
+### How to verify release artifacts locally (checksums)
 
 When a release is produced the `dist/` folder contains compiled artifacts and a `checksums.txt` file with SHA256 and SHA512 hashes. You can verify an artifact you downloaded against the published checksums using PowerShell (Windows) or sha256sum/sha512sum on Unix-like systems.
 
@@ -153,7 +151,7 @@ Get-FileHash -Path .\reader_launcher.exe -Algorithm SHA256
 (Get-Content checksums.txt) | Select-String -Pattern "reader_launcher.exe" -SimpleMatch
 ```
 
-If you want to double-check the file on VirusTotal you can either use the `VIRUSTOTAL_API_KEY` in your CI to obtain a full automated scan summary, or visit the VirusTotal GUI web page and paste the SHA256 value (the release workflow also adds GUI links when an API key is not present).
+If you want to double-check the file on a public scanner you can paste the SHA256 value into a scanner of your choice.
 
 ### Expected outcomes when running helper scripts locally
 
@@ -168,8 +166,7 @@ These helper scripts are intentionally forgiving so you can run the code and tes
 
 If you'd like, I can also:
 
-- Add a short `verify-release.ps1` helper that takes a downloaded artifact and checks it against the release `checksums.txt` and optionally queries VirusTotal with an API key.
-- Include parsed VirusTotal scan summaries into the release body (currently the release workflow attaches a `vt_scan_summary.txt` file to the release).
+- Add additional release-time checks such as ensuring uploaded release assets match `checksums.txt` exactly (strict verification).
 
 
 ## Diagnostic / Tests

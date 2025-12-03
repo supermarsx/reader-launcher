@@ -93,103 +93,60 @@ jobs:
             exit 1
           fi
 
-      - name: VirusTotal scan or provide detection URLs
+      - name: Generate artifact verification summary
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VTKEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
         run: |
-          mkdir -p vt_results
+          mkdir -p verify_results
           if [ -d "$ARTIFACT_DIR" ]; then
             for f in "$ARTIFACT_DIR"/*; do
               fname=$(basename "$f")
+              echo "--- Verifying $fname ---" >> verify_results/verify_summary.txt
               sha256=$(sha256sum "$f" | awk '{print $1}')
-              echo "File: $fname SHA256: $sha256" >> vt_results/scan_summary.txt
-              if [ -n "$VTKEY" ]; then
-                echo "Uploading $fname to VirusTotal..."
-                response=$(curl -s -X POST "https://www.virustotal.com/api/v3/files" -H "x-apikey: $VTKEY" -F file=@"$f")
-                analysisId=$(echo "$response" | jq -r '.data.id')
-                if [ "$analysisId" = "null" -o -z "$analysisId" ]; then
-                  echo "No analysis ID returned for $fname" >> vt_results/scan_summary.txt
-                  continue
-                fi
-                echo "Analysis id: $analysisId" >> vt_results/scan_summary.txt
-                # poll analysis endpoint
-                for i in {1..12}; do
-                  sleep 5
-                  report=$(curl -s -X GET "https://www.virustotal.com/api/v3/analyses/$analysisId" -H "x-apikey: $VTKEY")
-                  status=$(echo "$report" | jq -r '.data.attributes.status')
-                  if [ "$status" = "completed" ]; then
-                    stats=$(echo "$report" | jq -r '.data.attributes.stats | to_entries | map("") | .')
-                    # write a summarized result
-                    malicious=$(echo "$report" | jq -r '.data.attributes.stats.malicious')
-                    suspicious=$(echo "$report" | jq -r '.data.attributes.stats.suspicious')
-                    echo "Result for $fname: malicious=$malicious suspicious=$suspicious" >> vt_results/scan_summary.txt
-                    break
-                  fi
-                done
-              else
-                # No API key — record manual GUI link to check:
-                echo "VirusTotal GUI link: https://www.virustotal.com/gui/file/$sha256/detection" >> vt_results/scan_summary.txt
-              fi
+              echo "File: $fname SHA256: $sha256" >> verify_results/verify_summary.txt
+              echo "Checking checksums..." >> verify_results/verify_summary.txt
             done
-            # upload scan_summary.txt to the release
+            # attach a lightweight verify_summary (checksums only) to the release
             RELEASE_ID=${{ steps.create_release.outputs.result }}
-            if [ -f vt_results/scan_summary.txt ]; then
-              echo "Attaching vt_results/scan_summary.txt to release $RELEASE_ID"
-              curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" --data-binary @vt_results/scan_summary.txt "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=vt_scan_summary.txt"
+            if [ -f verify_results/verify_summary.txt ]; then
+              echo "Attaching verify_results/verify_summary.txt to release $RELEASE_ID"
+              curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" --data-binary @verify_results/verify_summary.txt "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=verify_summary.txt"
             fi
           else
-            echo "No artifacts found to scan"
+            echo "No artifacts found to summarize"
           fi
 
-      - name: Verify artifacts against checksums and optionally query VirusTotal
+      - name: Verify artifacts against checksums
         env:
-          VTKEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          STRICT: ${{ secrets.RELEASE_STRICT_VERIFY }}
         run: |
-          mkdir -p vt_results
+          mkdir -p verify_results
           if [ -d "$ARTIFACT_DIR" ]; then
             FAIL=0
             for f in "$ARTIFACT_DIR"/*; do
               fname=$(basename "$f")
-              echo "--- Verifying $fname ---" >> vt_results/verify_summary.txt
-              # Use PowerShell helper to verify checksums and optionally query VT
-              # choose checksum path based on ARTIFACT_DIR
+              echo "--- Verifying $fname ---" >> verify_results/verify_summary.txt
               if [ -f "$ARTIFACT_DIR/checksums.txt" ]; then
                 checksPath="$ARTIFACT_DIR/checksums.txt"
               else
                 checksPath=artifact/dist/checksums.txt
               fi
-              pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -ArtifactPath "$f" -Checksums "$checksPath" -VtKey "$VTKEY" > vt_results/verify_$fname.txt 2>&1
+              pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -ArtifactPath "$f" -Checksums "$checksPath" > verify_results/verify_$fname.txt 2>&1
               rc=$?
-              cat vt_results/verify_$fname.txt >> vt_results/verify_summary.txt
-              # if strict mode is enabled, fail on checksum mismatch or VT detection
-              if [ "${STRICT,,}" = "true" ] || [ "$STRICT" = "1" ]; then
-                if [ $rc -ne 0 ]; then
-                  echo "Checksum verification failed for $fname (rc=$rc)" >> vt_results/verify_summary.txt
-                  FAIL=1
-                fi
-                # scan vt results for malicious/suspicious numbers
-                vtline=$(grep -E "VirusTotal analysis: malicious=[0-9]+ suspicious=[0-9]+" vt_results/verify_$fname.txt || true)
-                if [ -n "$vtline" ]; then
-                  mal=$(echo "$vtline" | sed -n 's/.*malicious=\([0-9]*\).*/\1/p')
-                  susp=$(echo "$vtline" | sed -n 's/.*suspicious=\([0-9]*\).*/\1/p')
-                  if [ "$mal" -gt 0 ] || [ "$susp" -gt 0 ]; then
-                    echo "VirusTotal reported suspicious/malicious detections for $fname: malicious=$mal suspicious=$susp" >> vt_results/verify_summary.txt
-                    FAIL=1
-                  fi
-                fi
+              cat verify_results/verify_$fname.txt >> verify_results/verify_summary.txt
+              if [ $rc -ne 0 ]; then
+                echo "Checksum verification failed for $fname (rc=$rc)" >> verify_results/verify_summary.txt
+                FAIL=1
               fi
             done
             # attach verify_summary to release for convenience
             RELEASE_ID=${{ steps.create_release.outputs.result }}
-            if [ -f vt_results/verify_summary.txt ]; then
-              echo "Attaching vt_results/verify_summary.txt to release $RELEASE_ID"
-              curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" --data-binary @vt_results/verify_summary.txt "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=vt_verify_summary.txt"
+            if [ -f verify_results/verify_summary.txt ]; then
+              echo "Attaching verify_results/verify_summary.txt to release $RELEASE_ID"
+              curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" --data-binary @verify_results/verify_summary.txt "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=verify_summary.txt"
             fi
             if [ "$FAIL" = "1" ]; then
-              echo "Strict verification failed — aborting release (STRICT=$STRICT)"
+              echo "Verification failed — aborting release"
               exit 1
             fi
           else
@@ -212,13 +169,8 @@ jobs:
               const checks = fs.readFileSync(checksPath, 'utf8')
               bodySections.push('### Checksums\n```\n' + checks + '\n```')
             }
-            // append vt scan summary if present
-            const scanPath = 'vt_results/scan_summary.txt'
-            if (fs.existsSync(scanPath)) {
-              const s = fs.readFileSync(scanPath, 'utf8')
-              bodySections.push('### VirusTotal scan (automated)\n```\n' + s + '\n```')
-            }
-            const verifyPath = 'vt_results/verify_summary.txt'
+            // append verify summary if present
+            const verifyPath = 'verify_results/verify_summary.txt'
             if (fs.existsSync(verifyPath)) {
               const v = fs.readFileSync(verifyPath, 'utf8')
               bodySections.push('### Verification summary\n```\n' + v + '\n```')

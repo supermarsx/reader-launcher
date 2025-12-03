@@ -22,4 +22,4 @@ All notable changes to this project will be documented in this file.
 - Add: Build produces UPX and non-UPX binaries, zip package and release attachments
 - Add: Unit test harness (tests/unit/run-unit-tests.ps1) and CI-run unit tests in build workflow
 - Add: Build produces checksums.txt (SHA256/SHA512) for artifacts and release attaches checksums
-- Add: Release workflow performs VirusTotal scanning when `VIRUSTOTAL_API_KEY` secret is provided, otherwise it adds GUI detection links (no API required for manual checking)
+-- Add: Release workflow performs checksum verification and attaches verification summaries to releases

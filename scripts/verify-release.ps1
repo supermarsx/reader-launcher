@@ -2,9 +2,7 @@
   verify-release.ps1
 
   Purpose:
-    Verify a downloaded release artifact against the release `checksums.txt`
-    and optionally query VirusTotal for a quick detection summary (when a
-    `VIRUSTOTAL_API_KEY` is provided via environment or --vtkey).
+    Verify a downloaded release artifact against the release `checksums.txt`.
 
   Usage:
     pwsh -ExecutionPolicy Bypass -File scripts\verify-release.ps1 -ArtifactPath path\to\reader_launcher.exe -Checksums dist\checksums.txt
@@ -12,14 +10,11 @@
   Notes:
     - The script will compute SHA256 and SHA512 for the given artifact and
       compare results to checksums.txt.
-    - If a VirusTotal API key is available, the script will query VT for the
-      file report (no upload) and print a short detection summary.
 #>
 
 param(
-    [Parameter(Mandatory=$true)] [string]$ArtifactPath,
-    [string]$ChecksumsPath = "dist\checksums.txt",
-    [string]$VtKey = $env:VIRUSTOTAL_API_KEY
+  [Parameter(Mandatory=$true)] [string]$ArtifactPath,
+  [string]$ChecksumsPath = "dist\checksums.txt"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,24 +47,5 @@ if ($matchLine -notmatch $sha256) {
 }
 
 Write-Host "Checksum verification passed." -ForegroundColor Green
-
-if ($VtKey) {
-    Write-Host "Querying VirusTotal for hash summary..."
-    try {
-        $url = "https://www.virustotal.com/api/v3/files/$sha256"
-        $resp = Invoke-RestMethod -Method Get -Uri $url -Headers @{"x-apikey"=$VtKey} -ErrorAction Stop
-        $stats = $resp.data.attributes.last_analysis_stats
-        $malicious = $stats.malicious
-        $suspicious = $stats.suspicious
-        $undetected = $stats.undetected
-        Write-Host "VirusTotal analysis: malicious=$malicious suspicious=$suspicious undetected=$undetected"
-        Write-Host "Detailed GUI: https://www.virustotal.com/gui/file/$sha256/detection"
-    } catch {
-        Write-Warning "VirusTotal query failed: $($_.Exception.Message)"
-    }
-} else {
-    Write-Host "No VirusTotal API key provided — you can manually check:" -ForegroundColor Yellow
-    Write-Host "  https://www.virustotal.com/gui/file/$sha256/detection"
-}
 
 exit 0
