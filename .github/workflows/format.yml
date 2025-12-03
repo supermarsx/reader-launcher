@@ -12,4 +12,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run format script (PowerShell)
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\format.ps1
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/format.ps1
