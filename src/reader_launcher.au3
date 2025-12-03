@@ -3,7 +3,17 @@
 #AutoIt3Wrapper_Icon=..\assets\adobe_reader_logo.ico
 #AutoIt3Wrapper_Outfile=reader_launcher.exe
 #AutoIt3Wrapper_UseUpx=y
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.0
+# Application metadata (embedded into compiled binary via AutoIt3Wrapper)
+# AutoIt3Wrapper resource directives
+# NOTE: update these when bumping the release version
+#AutoIt3Wrapper_Res_Fileversion=0.25.2.0
+#AutoIt3Wrapper_Res_ProductVersion=0.25.2.0
+#AutoIt3Wrapper_Res_ProductName=reader-launcher
+#AutoIt3Wrapper_Res_FileDescription=A small robust launcher for PDF viewers
+#AutoIt3Wrapper_Res_Company=supermarsx
+#AutoIt3Wrapper_Res_InternalName=reader_launcher.exe
+#AutoIt3Wrapper_Res_OriginalFilename=reader_launcher.exe
+#AutoIt3Wrapper_Res_LegalCopyright=Copyright (c) 2025 supermarsx
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Region
 #EndRegion
@@ -38,6 +48,11 @@
 #ce ----------------------------------------------------------------------------
 
 ; Global Configurations
+; Application metadata (also visible via CLI)
+Global Const $APP_NAME = "reader-launcher"
+Global Const $APP_VERSION = "0.25.2"
+
+; Global Configurations
 Global $cfg_filename = @ScriptDir & "\..\launcher.ini", _
 		$cfg_section1 = "general"
 
@@ -49,7 +64,7 @@ Global $cfg_filename = @ScriptDir & "\..\launcher.ini", _
 ; - Normalize/convert numeric values using Int() and strip surrounding quotes
 ; - Keep exec path, logfile path relative to script directory where helpful
 ; -------------------------------
-; Read values from INI — be defensive: support both "sleeprand" and historical "sleeprandom".
+; Read values from INI ? be defensive: support both "sleeprand" and historical "sleeprandom".
 Local $raw_sleep = IniRead($cfg_filename, $cfg_section1, "sleep", 1000)
 Local $raw_sleeprand = IniRead($cfg_filename, $cfg_section1, "sleeprand", "")
 If $raw_sleeprand = "" Then $raw_sleeprand = IniRead($cfg_filename, $cfg_section1, "sleeprandom", 0)
@@ -76,7 +91,7 @@ Local $raw_autodiscover_persist = IniRead($cfg_filename, $cfg_section1, "autodis
 Local $raw_extra_params = IniRead($cfg_filename, $cfg_section1, "extra_params", "")
 Local $raw_preset = IniRead($cfg_filename, $cfg_section1, "preset", "")
 
-; Normalize / coerce to numeric where required — use Int() to convert string
+; Normalize / coerce to numeric where required ? use Int() to convert string
 ; values from INI to integers and protect our runtime logic.
 Local $cfg_sleep = Int($raw_sleep)
 Local $cfg_sleeprand = Int($raw_sleeprand)
@@ -102,7 +117,7 @@ Local $cfg_autodiscover_persist = Int($raw_autodiscover_persist)
 Local $cfg_extra_params = StringStripWS(StringReplace($raw_extra_params, '"', ''), 7)
 Local $cfg_preset = StringStripWS($raw_preset, 3)
 
-; Ensure sensible sleep range — avoid negative or inverted limits
+; Ensure sensible sleep range ? avoid negative or inverted limits
 If $cfg_sleepmin < 0 Then $cfg_sleepmin = 0
 If $cfg_sleepmax < $cfg_sleepmin Then $cfg_sleepmax = $cfg_sleepmin + 1000
 
@@ -121,7 +136,66 @@ Local $dbg_message = "Sleep time: " & $ex_sleep & " ms" & @CRLF & "Randomize sle
 debug($dbg_message)
 
 ; Apply the configured sleep delay unless the debug flag requests skipping it
+; Small console detection: prefer console output when a console window is present,
+; otherwise fall back to GUI message boxes for help/version to support GUI usage.
+Local $g_hasConsole = False
+Local $dllRet = DllCall("kernel32.dll", "ptr", "GetConsoleWindow")
+If @error = 0 And IsArray($dllRet) And $dllRet[0] <> 0 Then $g_hasConsole = True
+
+; run early CLI checks for --help / --version before potentially sleeping
+_CheckForHelpAndVersion()
 If ($cfg_debugnosleep = 0) Then Sleep($ex_sleep)
+
+; -------------------------
+; CLI helpers: --help / -h / /? and --version / -v
+; If these flags are present in the command-line, print a short usage
+; message or version and exit immediately. This makes the compiled EXE
+; behave like a CLI utility when invoked from scripts.
+; -------------------------
+Func _CheckForHelpAndVersion()
+	If $CmdLine[0] = 0 Then Return
+	For $i = 0 To $CmdLine[0] - 1
+		Local $a = StringLower(StringStripWS($CmdLine[$i], 3))
+		; support forcing console mode via --console or -c
+		If $a = "--console" Or $a = "-c" Then
+			$g_hasConsole = True
+			ContinueLoop
+		EndIf
+		If $a = "--help" Or $a = "-h" Or $a = "/?" Or $a = "/help" Then
+			_ShowUsage()
+			Exit 0
+		ElseIf $a = "--version" Or $a = "-v" Or $a = "/version" Then
+			_ShowVersion()
+			Exit 0
+		EndIf
+	Next
+EndFunc   ;==>_CheckForHelpAndVersion
+
+Func _ShowUsage()
+	If $g_hasConsole Then
+		ConsoleWrite($APP_NAME & " " & $APP_VERSION & @CRLF)
+		ConsoleWrite("Usage: " & $APP_NAME & " [options] [file(s)]" & @CRLF)
+		ConsoleWrite(@CRLF)
+		ConsoleWrite("Options:" & @CRLF)
+		ConsoleWrite("  --help, -h, /?          Show this help and exit" & @CRLF)
+		ConsoleWrite("  --version, -v           Print version information and exit" & @CRLF)
+		ConsoleWrite("  /debug=1                Enable debug (message boxes)" & @CRLF)
+		ConsoleWrite("  /debugnosleep=1         Skip sleep (for testing)" & @CRLF)
+		ConsoleWrite("  /debugnoexec=1          Skip executing the target (dry-run)" & @CRLF)
+	Else
+		MsgBox(0, $APP_NAME & ' ' & $APP_VERSION, 'Usage: ' & $APP_NAME & ' [options] [file(s)]' & @CRLF & @CRLF & 'Options:' & @CRLF & '/? or --help - Show this help' & @CRLF & '--version or -v - Print version')
+	EndIf
+EndFunc   ;==>_ShowUsage
+
+Func _ShowVersion()
+	If $g_hasConsole Then
+		ConsoleWrite($APP_NAME & " " & $APP_VERSION & @CRLF)
+	Else
+		MsgBox(0, $APP_NAME & ' ' & $APP_VERSION, 'Version: ' & $APP_VERSION)
+	EndIf
+EndFunc   ;==>_ShowVersion
+
+; (help/version checks executed earlier before sleep)
 
 ; Build the command-line parameter string to forward to the target executable
 ; (we remove the script name itself so only user-supplied params remain)
@@ -150,10 +224,10 @@ EndIf
 ; Autodiscovery: if enabled, loop through configured sources and attempt to
 ; locate a candidate executable. If found we use it for this run, and if the
 ; persist flag is set we write it back into the INI so future runs use it.
-; Autodiscovery is intentionally off by default — set autodiscover=1 to
+; Autodiscovery is intentionally off by default ? set autodiscover=1 to
 ; experiment.
 ; NOTE: autodiscovery may return nothing on minimal build machines (no Reader)
-; which is expected — the behavior is conservative and informative.
+; which is expected ? the behavior is conservative and informative.
 ; Autodiscover (if enabled)
 If $cfg_autodiscover = 1 Then
 	Local $found = AutoDiscoverExecPath($cfg_autodiscover_sources)
@@ -190,7 +264,7 @@ If ($cfg_debugnoexec = 0) Then
 	If Not FileExists($cfg_execpath) Then
 		_WriteLog("warn", "Configured execpath does not point to an existing file: " & $cfg_execpath)
 		MsgBox(48, "Launcher warning", "Configured execpath does not point to an existing file:" & @CRLF & $cfg_execpath)
-		; still proceed to attempt execution — ShellExecute / Run may still attempt
+		; still proceed to attempt execution ? ShellExecute / Run may still attempt
 	EndIf
 
 	; Invoke the configured execution style (ShellExecute default)
@@ -209,16 +283,16 @@ Func debug($message)
 EndFunc   ;==>debug
 
 ; ---------------- helper utilities ----------------
-; _EnsureLogDirExists(path) — ensure the folder for the given file path exists.
+; _EnsureLogDirExists(path) ? ensure the folder for the given file path exists.
 ; Extracts the directory component and creates it if it does not exist.
 Func _EnsureLogDirExists($path)
 	Local $dir = StringTrimRight($path, StringInStr($path, '\\', 0, -1) - 1)
 	If Not FileExists($dir) Then DirCreate($dir)
 EndFunc   ;==>_EnsureLogDirExists
 
-; Log(level, message) — write timestamped messages to the log file.
+; Log(level, message) ? write timestamped messages to the log file.
 ; The function respects cfg_logenabled and cfg_loglevel and honors append/overwrite.
-; _WriteLog(level, message) — write timestamped messages to the log file.
+; _WriteLog(level, message) ? write timestamped messages to the log file.
 Func _WriteLog($level, $message)
 	If $cfg_logenabled <> 1 Then Return
 	Local $map = MapLevel($level)
@@ -233,7 +307,7 @@ Func _WriteLog($level, $message)
 	FileClose($h)
 EndFunc   ;==>_WriteLog
 
-; MapLevel(name) — convert a string level into an integer priority
+; MapLevel(name) ? convert a string level into an integer priority
 ; Lower numbers map to more severe events (error=1..debug=4)
 Func MapLevel($name)
 	Select
@@ -250,7 +324,7 @@ Func MapLevel($name)
 	EndSelect
 EndFunc   ;==>MapLevel
 
-; ExecLaunch — run executables in various styles
+; ExecLaunch ? run executables in various styles
 ; Returns the PID for Run/RunWait or 0 for ShellExecute (successful) and
 ; passes through RunWait return code when using runwait.
 Func ExecLaunch($path, $params, $style)
@@ -331,12 +405,12 @@ Func ParseCmdLineArgs()
 			Case "autodiscover_persist", "autodiscoverpersist"
 				$cfg_autodiscover_persist = Int($val)
 			Case Else
-				; unknown param — leave as file argument
+				; unknown param ? leave as file argument
 		EndSwitch
 	Next
 EndFunc   ;==>ParseCmdLineArgs
 
-; Auto-discovery helper — check registry and common Program Files locations
+; Auto-discovery helper ? check registry and common Program Files locations
 Func AutoDiscoverExecPath(ByRef $sources)
 	; sources is an array from StringSplit earlier
 	For $s = 1 To $sources[0]
@@ -354,12 +428,12 @@ Func AutoDiscoverExecPath(ByRef $sources)
 					If FileExists($r2) Then Return $r2
 				EndIf
 			Case "programfiles", "programfilesx86", "programfilesx64"
-				; check common locations — order: Program Files (x86) and Program Files
+				; check common locations ? order: Program Files (x86) and Program Files
 				Local $candList = @ProgramFilesDir & "\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe|" & @ProgramFilesDir & "\Adobe\Acrobat\Acrobat.exe|" & @ProgramFilesDir & "\SumatraPDF\SumatraPDF.exe|" & @ProgramFilesDir & "(x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe|" & @ProgramFilesDir & "(x86)\Adobe\Acrobat\Acrobat.exe|" & @ProgramFilesDir & "(x86)\SumatraPDF\SumatraPDF.exe"
 				Local $candidates = StringSplit($candList, "|", 2)
 				For $c = 1 To $candidates[0]
 					Local $path = $candidates[$c]
-					; attempt to normalize odd strings like (x86) — perform two common expands
+					; attempt to normalize odd strings like (x86) ? perform two common expands
 					$path = StringReplace($path, "(x86)", "Program Files (x86)")
 					If FileExists($path) Then Return $path
 				Next
@@ -382,7 +456,7 @@ Func DetermineDefaultPreset($path)
 	If StringInStr($lower, "acro") Or StringInStr($lower, "acrord") Or StringInStr($lower, "acroRd") Then
 		Return "suppress"
 	EndIf
-	; SumatraPDF — no special flags by default
+	; SumatraPDF ? no special flags by default
 	If StringInStr($lower, "sumatrapdf") Then Return ""
 	; Fallback: no preset
 	Return ""
@@ -421,3 +495,4 @@ Func GetPresetParams($name)
 		Return ""
 	EndIf
 EndFunc   ;==>GetPresetParams
+

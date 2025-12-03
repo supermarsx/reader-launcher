@@ -11,34 +11,70 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Compute next release tag and create release
-        id: create_release
+      - name: Compute next release tag (0.YY.N)
+        id: compute_tag
         uses: actions/github-script@v6
         with:
           script: |
-            const runId = context.payload.workflow_run.id
             const owner = context.repo.owner
             const repo = context.repo.repo
-
-            // derive two-digit year
             const fullYear = new Date().getFullYear()
             const yy = String(fullYear).slice(-2)
 
-            // list existing releases and find the highest numbered release for this year
+            // look at existing releases and tags; accept both formats (YY.N and 0.YY.N)
             const releases = await github.rest.repos.listReleases({ owner, repo })
             let max = 0
             for (const r of releases.data) {
-              const m = r.tag_name.match(new RegExp('^' + yy + '\\.(\\d+)$'))
+              // accept 23.4 or 0.23.4
+              const m = r.tag_name.match(new RegExp('^(?:0\.)?' + yy + '\.(\\d+)$'))
               if (m) {
                 const v = parseInt(m[1], 10)
                 if (v > max) max = v
               }
             }
             const next = max + 1
-            const tag = `${yy}.${next}`
+            const tag = `0.${yy}.${next}`
+            core.info(`Next release tag will be ${tag}`)
+            return tag
+
+      - name: Prepare release commit & tag (bump VERSION, update sources)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Git for version bump commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump VERSION and sync source
+        env:
+          TAG_NAME: ${{ steps.compute_tag.outputs.result }}
+        run: |
+          echo "Setting version to $TAG_NAME"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\bump-version.ps1 -Version $TAG_NAME
+          git add VERSION src/reader_launcher.au3 || true
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): bump version to $TAG_NAME [skip ci]" || true
+          fi
+
+      - name: Tag & push release commit
+        env:
+          TAG_NAME: ${{ steps.compute_tag.outputs.result }}
+        run: |
+          git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
+          git push origin HEAD --follow-tags
+
+      - name: Create GitHub release from tag
+        id: create_release
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const owner = context.repo.owner
+            const repo = context.repo.repo
+            const tag = process.env.TAG_NAME || '${{ steps.compute_tag.outputs.result }}'
             core.info(`Creating release ${tag}`)
             const rel = await github.rest.repos.createRelease({ owner, repo, tag_name: tag, name: tag, body: `Automated release ${tag}`, draft: false, prerelease: false })
-            // export numeric release id for subsequent steps
             return rel.data.id
 
       - name: Download artifacts from successful Build run

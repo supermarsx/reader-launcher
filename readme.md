@@ -36,6 +36,12 @@ You can use extra command-line options to override config settings for the curre
 reader_launcher.exe /autodiscover=1 /autodiscover_persist=1 /logenabled=1 /logfile="C:\temp\launcher.log" /execstyle=Run "C:\path\to\doc.pdf"
 
 reader_launcher.exe /debug=1 /debugnosleep=1 "C:\file.pdf"
+
+Common quick-help flags are supported by the compiled executable:
+
+- `--help`, `-h`, or `/?` — print a short usage summary and exit (exit code 0)
+- `--version` or `-v` — print the bundled version string and exit (exit code 0)
+ - `--console` or `-c` — force console mode (print help/version to stdout) even when running without a console (e.g., double-click)
 ```
 
 ## Configuration (launcher.ini)
@@ -102,8 +108,8 @@ Specifically these scripts are provided:
 - `scripts/format.ps1` — runs an AutoIt formatter (if present) or prints guidance.
 - `scripts/test.ps1` — runs tests under `tests/` (`validate-config.ps1`, `autodiscovery-test.ps1`).
 - `scripts/build.ps1` — attempt to compile `reader_launcher.au3` into `dist\\reader_launcher.exe` using Aut2Exe if installed.
-- `scripts/build.ps1` — attempt to compile `reader_launcher.au3` into `dist\\reader_launcher.exe` using Aut2Exe if installed.
 - `scripts/verify-release.ps1` — helper to verify downloaded artifacts against `dist/checksums.txt` (checksums-only verification).
+- `scripts/bump-version.ps1` — helper to bump or set the repository `VERSION` and synchronize the `APP_VERSION` constant and wrapper resource version lines in `src/reader_launcher.au3`.
 
 
 Example quick checks (PowerShell):
@@ -159,6 +165,10 @@ If you want to double-check the file on a public scanner you can paste the SHA25
 - `scripts/format.ps1` — will run `au3fix` if present, otherwise it is a safe no-op and warns that formatting was skipped.
 - `scripts/test.ps1` — runs required tests (`tests/validate-config.ps1`, `tests/validate-config-cases.ps1`) and optional tests (autodiscovery and unit tests). Optional tests are skipped gracefully when dependencies (like AutoIt runtime) are missing.
 - `scripts/build.ps1` — compiles the AutoIt script using `Aut2Exe` if present on the machine. If `Aut2Exe` is not available the script exits non-successfully so the build step can be retried on a machine or CI runner where AutoIt is installed. The build step also produces `checksums.txt` in `dist/` for verification.
+
+Autoversioning
+
+- The repository maintains a root-level `VERSION` file (e.g., `1.0.0`) as the single source of truth for the release version. Use `scripts/bump-version.ps1` to set or bump the version (patch/minor/major), which will update `VERSION` and sync `src/reader_launcher.au3` resource and APP_VERSION constants.
 
 These helper scripts are intentionally forgiving so you can run the code and tests on developer machines without extra tooling installed; CI runners used by this project install AutoIt and UPX so they run all steps end-to-end.
 

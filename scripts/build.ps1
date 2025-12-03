@@ -61,6 +61,9 @@ if (-not $aut2exe) {
 }
 
 Write-Host "Compiling $src -> $out"
+## Read project version for informational purposes (keeps logs clear)
+$verFile = Join-Path $here "..\VERSION"
+if (Test-Path $verFile) { $projVer = (Get-Content -Path $verFile -Raw).Trim(); Write-Host "Project VERSION: $projVer" }
 try {
     # detect an icon file in assets (pick the first .ico) and include it when invoking Aut2Exe
     $assetsDir = Join-Path $here "..\assets"
@@ -152,6 +155,12 @@ if (Test-Path $exampleIni) { $tmpFiles += $exampleIni } else { Write-Warning "la
 
 if (Test-Path $zipName) { Remove-Item $zipName -Force }
 Compress-Archive -Path $tmpFiles -DestinationPath $zipName -Force
+
+# Ensure example config is also present as a top-level artifact for releases
+if (Test-Path $exampleIni) {
+    $exampleTarget = Join-Path $outDir "launcher.example.ini"
+    Copy-Item -Path $exampleIni -Destination $exampleTarget -Force
+}
 
 # Build a second zip that contains the UPX variant (or the copied -upx file)
 $tmpFilesUpx = @()

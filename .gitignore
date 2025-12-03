@@ -8,3 +8,4 @@ logs/
 /tests/tmp
 temp_*.au3
 launcher.ini
+tmp_*.ps1

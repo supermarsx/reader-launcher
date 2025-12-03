@@ -23,7 +23,7 @@ jobs:
       - name: Verify produced artifacts
         run: |
           Write-Host "Contents of dist:"; Get-ChildItem -Path dist -Force | Format-Table -AutoSize
-          $expected = @('reader_launcher.exe','reader_launcher-upx.exe','reader_launcher_package.zip','reader_launcher_upx_package.zip','checksums.txt')
+          $expected = @('reader_launcher.exe','reader_launcher-upx.exe','reader_launcher_package.zip','reader_launcher_upx_package.zip','checksums.txt','launcher.example.ini')
           $missing = @()
           foreach ($e in $expected) { if (-not (Test-Path (Join-Path 'dist' $e))) { $missing += $e } }
           if ($missing.Count -gt 0) { Write-Error "Missing expected artifact(s): $($missing -join ', ')"; exit 1 }
@@ -34,6 +34,7 @@ jobs:
           $check = @( 'reader_launcher.exe', 'reader_launcher-upx.exe' )
           Add-Type -AssemblyName System.Drawing
           $fail = $false
+          $ver = (Get-Content -Path VERSION -Raw).Trim()
           foreach ($name in $check) {
             $path = Join-Path $PWD 'dist' $name
             if (-not (Test-Path $path)) { Write-Error "Missing expected exe: $path"; $fail = $true; continue }
@@ -58,6 +59,43 @@ jobs:
             if (Test-Path (Join-Path $PWD 'dist/tmp_unzip')) { Remove-Item -Recurse -Force (Join-Path $PWD 'dist/tmp_unzip') }
             if ($entries.Count -eq 0) { Write-Error "Zip $z does not contain an .ico file"; exit 1 }
             else { Write-Host "Zip $z contains .ico file(s):"; $entries | ForEach-Object { Write-Host "  $($_.FullName)" } }
+          }
+
+      - name: Confirm EXE contains version / product metadata
+        shell: pwsh
+        run: |
+          $check = @( 'reader_launcher.exe', 'reader_launcher-upx.exe' )
+          $fail = $false
+          foreach ($name in $check) {
+            $path = Join-Path $PWD 'dist' $name
+            if (-not (Test-Path $path)) { Write-Error "Missing expected exe: $path"; $fail = $true; continue }
+            $vi = (Get-Item $path).VersionInfo
+            if (-not $vi.ProductVersion -or -not $vi.FileDescription -or -not $vi.ProductName) { Write-Error "Missing metadata in $name (ProductVersion/FileDescription/ProductName)"; $fail = $true; continue }
+            if ($vi.ProductVersion -notlike "*$ver*") { Write-Error "ProductVersion ($($vi.ProductVersion)) does not contain VERSION ($ver) for $name"; $fail = $true } else { Write-Host "Metadata for $name: ProductVersion=$($vi.ProductVersion) ProductName=$($vi.ProductName) FileDescription=$($vi.FileDescription)" }
+          }
+          if ($fail) { exit 1 }
+
+      - name: Run compiled EXE --help / --version tests
+        shell: pwsh
+        run: |
+          $ver = (Get-Content -Path VERSION -Raw).Trim()
+          $exeList = @( 'reader_launcher.exe', 'reader_launcher-upx.exe' )
+          foreach ($n in $exeList) {
+            $path = Join-Path $PWD 'dist' $n
+            Write-Host "Testing $path --help"
+            $help = & $path '--help' 2>&1
+            if ($LASTEXITCODE -ne 0) { Write-Error "--help returned non-zero for $n (rc=$LASTEXITCODE)"; exit 1 }
+            if ($help -notmatch 'Usage') { Write-Error "--help output for $n did not contain Usage"; Write-Host "Output:\n$help"; exit 1 }
+
+            Write-Host "Testing $path --version"
+            $vout = & $path '--version' 2>&1
+            if ($LASTEXITCODE -ne 0) { Write-Error "--version returned non-zero for $n (rc=$LASTEXITCODE)"; exit 1 }
+            if ($vout -notmatch [regex]::Escape($ver)) { Write-Error "--version output for $n did not contain VERSION ($ver). Output: $vout"; exit 1 }
+            # also test forcing console mode combined with help
+            Write-Host "Testing $path --console --help"
+            $consoleHelp = & $path '--console' '--help' 2>&1
+            if ($LASTEXITCODE -ne 0) { Write-Error "--console --help returned non-zero for $n (rc=$LASTEXITCODE)"; exit 1 }
+            if ($consoleHelp -notmatch 'Usage') { Write-Error "--console --help output for $n did not contain Usage"; Write-Host "Output:\n$consoleHelp"; exit 1 }
           }
 
       - name: Run AutoIt unit tests

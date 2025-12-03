@@ -13,8 +13,8 @@
 #>
 
 param(
-  [Parameter(Mandatory=$true)] [string]$ArtifactPath,
-  [string]$ChecksumsPath = "dist\checksums.txt"
+    [Parameter(Mandatory = $true)] [string]$ArtifactPath,
+    [string]$ChecksumsPath = "dist\checksums.txt"
 )
 
 $ErrorActionPreference = 'Stop'

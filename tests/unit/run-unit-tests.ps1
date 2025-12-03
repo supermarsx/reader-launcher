@@ -22,6 +22,17 @@ param($scriptPath, [Parameter(ValueFromRemainingArguments=$true)] $rest)
 # Combine remaining args for simple parsing
 $argsStr = $rest -join ' '
 
+    # early help/version handling: print help or version and exit
+    if ($argsStr -match '(^|\s)(--help|-h|/\?)($|\s)') {
+        Write-Output "reader-launcher 1.0.0"
+        Write-Output "Usage: reader-launcher [options] [file(s)]"
+        Exit 0
+    }
+    if ($argsStr -match '(^|\s)(--version|-v|/version)($|\s)') {
+        Write-Output "reader-launcher 1.0.0"
+        Exit 0
+    }
+
 # determine logfile if present
 $logfile = ''
 if ($argsStr -match '(/logfile=|/logfile\s+)("?)([^"\s]+)') { $logfile = $matches[3] }
@@ -86,6 +97,23 @@ If (-not (Test-Path (Split-Path $tmpLog))) { New-Item -ItemType Directory -Path 
 If (Test-Path $tmpLog) { Remove-Item $tmpLog -Force }
 
 Write-Host "Running unit test: ensure launcher runs in debug/dry-run mode and writes log"
+# Test 0a - help flag should print usage and exit successfully
+Write-Host "Running unit test: help flag outputs usage"
+$helpOut = & $autoit.Path $script.Path '--help'
+if ($LASTEXITCODE -ne 0) { Write-Error "Unit test failed: --help did not exit 0 (rc=$LASTEXITCODE)"; Exit 0 }
+if (-not ($helpOut -match 'Usage')) { Write-Error "Unit test failed: expected 'Usage' in --help output"; Exit 1 }
+
+# Test 0b - version flag should print version and exit 0
+Write-Host "Running unit test: version flag outputs version"
+$verOut = & $autoit.Path $script.Path '--version'
+if ($LASTEXITCODE -ne 0) { Write-Error "Unit test failed: --version did not exit 0 (rc=$LASTEXITCODE)"; Exit 2 }
+if (-not ($verOut -match '1.0.0')) { Write-Error "Unit test failed: expected '1.0.0' in --version output"; Exit 3 }
+
+# Test 0c - console flag should be accepted and when combined with --help it should still print Usage
+Write-Host "Running unit test: --console + --help still prints usage"
+$consoleHelpOut = pwsh -NoProfile -File $autoit.Path $script.Path '--console' '--help' 2>&1
+if ($LASTEXITCODE -ne 0) { Write-Error "Unit test failed: --console --help did not exit 0 (rc=$LASTEXITCODE)"; Exit 4 }
+if (-not ($consoleHelpOut -match 'Usage')) { Write-Error "Unit test failed: expected 'Usage' in --console --help output"; Exit 5 }
 # Test 1 - basic logfile creation
 $args = "/debugnoexec=1 /debugnosleep=1 /logenabled=1 /loglevel=4 /logfile=`"$tmpLog`""
 & $autoit.Path $script.Path $args
@@ -179,8 +207,8 @@ logenabled=0
 $neutralIni | Out-File -FilePath $projectRootIni -Encoding ASCII
 
 Write-Host "Running unit test: logfile append/overwrite behaviour"
- $argLog = '/logfile=' + $tmpLog5
- $args5a = @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4',$argLog,'/logappend=1')
+$argLog = '/logfile=' + $tmpLog5
+$args5a = @('/debugnoexec=1', '/debugnosleep=1', '/logenabled=1', '/loglevel=4', $argLog, '/logappend=1')
 & $autoit.Path $script.Path $args5a
 Start-Sleep -Milliseconds 250
 & $autoit.Path $script.Path $args5a
@@ -190,7 +218,7 @@ $lines = (Get-Content $tmpLog5 -ErrorAction SilentlyContinue | Where-Object { $_
 if ($lines.Count -lt 2) { Write-Error "Unit test failed: expected appended log entries, found $($lines.Count)"; Exit 13 }
 
 # Now run with overwrite (logappend=0) and verify only a single fresh entry exists
-& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4',$argLog,'/logappend=0')
+& $autoit.Path $script.Path @('/debugnoexec=1', '/debugnosleep=1', '/logenabled=1', '/loglevel=4', $argLog, '/logappend=0')
 Start-Sleep -Milliseconds 250
 $final = (Get-Content $tmpLog5 -ErrorAction SilentlyContinue | Where-Object { $_ -ne "" })
 if ($final.Count -ne 1) { Write-Error "Unit test failed: expected overwrite to produce single log entry, found $($final.Count)"; Exit 14 }
@@ -217,8 +245,8 @@ $backupIni2 = ""
 if (Test-Path $iniFile) { $backupIni2 = Join-Path $here "..\tmp\launcher.ini.srand.bak"; Copy-Item $iniFile $backupIni2 -Force }
 $iniSrand | Out-File -FilePath $iniFile -Encoding ASCII
 
- $argLog6 = '/logfile=' + $tmpLog6
-& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4',$argLog6)
+$argLog6 = '/logfile=' + $tmpLog6
+& $autoit.Path $script.Path @('/debugnoexec=1', '/debugnosleep=1', '/logenabled=1', '/loglevel=4', $argLog6)
 Start-Sleep -Milliseconds 250
 if (-not (Test-Path $tmpLog6)) { Write-Error "Unit test failed: sleeprand log not created"; Exit 15 }
 $c6 = Get-Content $tmpLog6 -ErrorAction SilentlyContinue
@@ -235,7 +263,7 @@ logenabled=1
 loglevel=4
 "@
 $iniSrand2 | Out-File -FilePath $iniFile -Encoding ASCII
-& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4',$argLog6)
+& $autoit.Path $script.Path @('/debugnoexec=1', '/debugnosleep=1', '/logenabled=1', '/loglevel=4', $argLog6)
 Start-Sleep -Milliseconds 250
 $c62 = Get-Content $tmpLog6 -ErrorAction SilentlyContinue
 if (-not (Select-String -Path $tmpLog6 -Pattern 'Randomize sleep: 1' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: Randomize sleep message not found (sleeprandom)"; Exit 17 }
@@ -256,7 +284,7 @@ loglevel=4
 "@
 $iniQuoted | Out-File -FilePath $iniFile -Encoding ASCII
 $argLog7 = '/logfile=' + $tmpLog7
-& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4',$argLog7,'C:\file.pdf')
+& $autoit.Path $script.Path @('/debugnoexec=1', '/debugnosleep=1', '/logenabled=1', '/loglevel=4', $argLog7, 'C:\file.pdf')
 Start-Sleep -Milliseconds 250
 if (-not (Test-Path $tmpLog7)) { Write-Error "Unit test failed: quoted execpath log not created"; Exit 18 }
 $c7 = Get-Content $tmpLog7 -ErrorAction SilentlyContinue
@@ -295,7 +323,7 @@ function RunExecStyle($style, $logname) {
     $outLog = Join-Path $here "..\tmp\$logname"
     If (Test-Path $outLog) { Remove-Item $outLog -Force }
     Write-Host "Testing execstyle=$style -> logging to $outLog"
-    & $autoit.Path $script.Path @('/debugnosleep=1','/debugnoexec=0','/logenabled=1','/loglevel=4','/logfile=' + $outLog, '/execstyle=' + $style, 'C:\dummy.pdf')
+    & $autoit.Path $script.Path @('/debugnosleep=1', '/debugnoexec=0', '/logenabled=1', '/loglevel=4', '/logfile=' + $outLog, '/execstyle=' + $style, 'C:\dummy.pdf')
     Start-Sleep -Milliseconds 300
     if (-not (Test-Path $outLog)) { Write-Error "ExecLaunch test failed: log for style $style not created"; Exit 20 }
     $t = Get-Content $outLog -ErrorAction SilentlyContinue
@@ -328,7 +356,7 @@ if (-not (Select-String -InputObject $runContent -Pattern 'Executed with style=r
 $paramLog = Join-Path $here "..\tmp\unit-test-params-space.log"
 If (Test-Path $paramLog) { Remove-Item $paramLog -Force }
 Write-Host "Testing parameter forwarding with spaces and extra_params"
-& $autoit.Path $script.Path @('/debugnoexec=1','/debugnosleep=1','/logenabled=1','/loglevel=4','/logfile=' + $paramLog,'/extra_params=/x /flag1','C:\my path\file one.pdf')
+& $autoit.Path $script.Path @('/debugnoexec=1', '/debugnosleep=1', '/logenabled=1', '/loglevel=4', '/logfile=' + $paramLog, '/extra_params=/x /flag1', 'C:\my path\file one.pdf')
 Start-Sleep -Milliseconds 300
 if (-not (Test-Path $paramLog)) { Write-Error "ExecLaunch parameter-forwarding log missing"; Exit 26 }
 $pcont = Get-Content $paramLog -Raw -ErrorAction SilentlyContinue
