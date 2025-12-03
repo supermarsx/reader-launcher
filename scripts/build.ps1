@@ -208,7 +208,7 @@ Write-Host "Checksums written to: $checksums"
 Write-Host "Attempting post-compile metadata fix using rcedit (if available)"
 $rcedit = Get-Command rcedit -ErrorAction SilentlyContinue
 if (-not $rcedit) {
-    $rceditCandidates = @("C:\\Program Files\\rcedit\\rcedit.exe","C:\\Program Files (x86)\\rcedit\\rcedit.exe","C:\\ProgramData\\chocolatey\\bin\\rcedit.exe")
+    $rceditCandidates = @("C:\\Program Files\\rcedit\\rcedit.exe", "C:\\Program Files (x86)\\rcedit\\rcedit.exe", "C:\\ProgramData\\chocolatey\\bin\\rcedit.exe")
     foreach ($p in $rceditCandidates) { if (Test-Path $p) { $rcedit = $p; break } }
 }
 if ($rcedit) {
@@ -241,8 +241,10 @@ if ($rcedit) {
             if ($args.Count -gt 0) {
                 Write-Host "Applying metadata to: $f with args: $($args -join ' ')"
                 & "$rcedit" $f $args *>&1 | Tee-Object -FilePath ([IO.Path]::GetTempFileName() + '.rcedit.log')
-            } else { Write-Host "No metadata fields found to apply for $f" }
+            }
+            else { Write-Host "No metadata fields found to apply for $f" }
         }
     }
-} else { Write-Host "rcedit not found; skipping post-compile metadata step (optional)." }
+}
+else { Write-Host "rcedit not found; skipping post-compile metadata step (optional)." }
 Exit 0
