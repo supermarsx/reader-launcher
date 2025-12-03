@@ -226,8 +226,8 @@ if ($rcedit) {
         $m = [regex]::Match($sourceText, "AutoIt3Wrapper_Res_FileDescription=(?<fd>.*)")
         if ($m.Success) { $fileDesc = $m.Groups['fd'].Value.Trim() }
     }
-    if (-not $wrappedProdVer -and Test-Path $verFile) { $wrappedProdVer = (Get-Content -Path $verFile -Raw).Trim() }
-    if (-not $wrappedFileVer -and $wrappedProdVer) { $wrappedFileVer = $wrappedProdVer + ".0" }
+    if ((-not $wrappedProdVer) -and (Test-Path $verFile)) { $wrappedProdVer = (Get-Content -Path $verFile -Raw).Trim() }
+    if ((-not $wrappedFileVer) -and $wrappedProdVer) { $wrappedFileVer = $wrappedProdVer + ".0" }
 
     # apply metadata to non-upx and upx exes
     $applyTo = @($out, $out_upx)
