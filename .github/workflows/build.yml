@@ -20,6 +20,9 @@ jobs:
       - name: Install rcedit (optional, used for post-compile metadata embed) via Chocolatey
         run: choco install rcedit -y || Write-Host 'rcedit may not be available on this runner; post-compile metadata fix will be skipped if missing.'
 
+      - name: Attempt to install AutoIt3Wrapper via Chocolatey (best-effort)
+        run: choco install autoit3wrapper -y || choco install au3wrapper -y || Write-Host 'autoit3wrapper not available in chocolatey; will try other fallbacks.'
+
       - name: Ensure AutoIt3Wrapper exists (required for console-capable builds)
         shell: pwsh
         run: |
@@ -28,7 +31,38 @@ jobs:
             $candidates = @("C:\\Program Files (x86)\\AutoIt3\\AutoIt3Wrapper\\AutoIt3Wrapper.exe","C:\\Program Files\\AutoIt3\\AutoIt3Wrapper\\AutoIt3Wrapper.exe","C:\\Program Files (x86)\\AutoIt3\\AutoIt3Wrapper.exe","C:\\Program Files\\AutoIt3\\AutoIt3Wrapper.exe")
             foreach ($p in $candidates) { if (Test-Path $p) { $wrapper = $p; break } }
           }
-          if (-not $wrapper) { Write-Host "AutoIt3Wrapper not found on runner. Attempting to install AutoIt via Chocolatey (which typically includes AutoIt3Wrapper)..."; choco install autoit -y }
+          if (-not $wrapper) { Write-Host "AutoIt3Wrapper not found on runner. Attempting to install AutoIt via Chocolatey (which sometimes includes AutoIt3Wrapper)..."; choco install autoit -y }
+          # If wrapper is still not present try a few additional likely locations where Chocolatey or SciTE places it
+          if (-not $wrapper) {
+            $extraCandidates = @(
+              "C:\\ProgramData\\chocolatey\\lib\\autoit\\tools\\AutoIt3Wrapper\\AutoIt3Wrapper.exe",
+              "C:\\ProgramData\\chocolatey\\lib\\autoit3wrapper\\tools\\AutoIt3Wrapper.exe",
+              "C:\\ProgramData\\chocolatey\\bin\\AutoIt3Wrapper.exe",
+              "C:\\Program Files\\AutoIt3\\SciTE\\AutoIt3Wrapper\\AutoIt3Wrapper.exe",
+              "C:\\Program Files (x86)\\AutoIt3\\SciTE\\AutoIt3Wrapper\\AutoIt3Wrapper.exe"
+            )
+            foreach ($p in $extraCandidates) { if (Test-Path $p) { $wrapper = $p; break } }
+          }
+          # As a last resort try to download AutoIt3Wrapper.exe into ProgramData and use that (best-effort)
+          if (-not $wrapper) {
+            Write-Host "AutoIt3Wrapper still not found; attempting to fetch AutoIt3Wrapper.exe from GitHub releases (best-effort fallback)"
+            $targetDir = Join-Path $env:ProgramData 'AutoIt3Wrapper'
+            if (-not (Test-Path $targetDir)) { New-Item -ItemType Directory -Path $targetDir | Out-Null }
+            $dest = Join-Path $targetDir 'AutoIt3Wrapper.exe'
+            $urls = @(
+              'https://github.com/AutoIt-Tools/AutoIt3Wrapper/releases/latest/download/AutoIt3Wrapper.exe',
+              'https://github.com/AutoItConsulting/AutoIt3Wrapper/releases/latest/download/AutoIt3Wrapper.exe',
+              'https://github.com/AutoIt-Script/AutoIt3Wrapper/releases/latest/download/AutoIt3Wrapper.exe'
+            )
+            foreach ($u in $urls) {
+              try {
+                Invoke-WebRequest -Uri $u -OutFile $dest -UseBasicParsing -ErrorAction Stop -TimeoutSec 30
+                if (Test-Path $dest) { $wrapper = $dest; break }
+              }
+              catch { Write-Host "Download attempt failed for $u: $($_.Exception.Message)" }
+            }
+            if ($wrapper) { Write-Host "Downloaded AutoIt3Wrapper to: $wrapper" }
+          }
           $wrapper = Get-Command AutoIt3Wrapper -ErrorAction SilentlyContinue
           if (-not $wrapper) { Write-Error "AutoIt3Wrapper not found on runner after attempting install. Please ensure AutoIt3Wrapper is available for the build (CI requires AutoIt3Wrapper to produce console-capable EXEs). Aborting."; exit 1 }
           Write-Host "Found AutoIt3Wrapper: $wrapper"
