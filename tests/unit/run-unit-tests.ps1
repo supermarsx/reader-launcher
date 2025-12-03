@@ -23,12 +23,12 @@ param($scriptPath, [Parameter(ValueFromRemainingArguments=$true)] $rest)
 $argsStr = $rest -join ' '
 
     # early help/version handling: print help or version and exit
-    if ($argsStr -match '(^|\s)(--help|-h|/\?)($|\s)') {
+    if ($argsStr -match '(^|\s)(--help|-h|/\?|/h)($|\s)') {
         Write-Output "reader-launcher 1.0.0"
         Write-Output "Usage: reader-launcher [options] [file(s)]"
         Exit 0
     }
-    if ($argsStr -match '(^|\s)(--version|-v|/version)($|\s)') {
+    if ($argsStr -match '(^|\s)(--version|-v|/version|/v)($|\s)') {
         Write-Output "reader-launcher 1.0.0"
         Exit 0
     }
@@ -109,11 +109,48 @@ $verOut = & $autoit.Path $script.Path '--version'
 if ($LASTEXITCODE -ne 0) { Write-Error "Unit test failed: --version did not exit 0 (rc=$LASTEXITCODE)"; Exit 2 }
 if (-not ($verOut -match '1.0.0')) { Write-Error "Unit test failed: expected '1.0.0' in --version output"; Exit 3 }
 
+# Test 0b2 - verify alias /h behaves like --help
+Write-Host "Running unit test: /h outputs usage"
+$helpOut2 = & $autoit.Path $script.Path '/h'
+if ($LASTEXITCODE -ne 0) { Write-Error "Unit test failed: /h did not exit 0 (rc=$LASTEXITCODE)"; Exit 0 }
+if (-not ($helpOut2 -match 'Usage')) { Write-Error "Unit test failed: expected 'Usage' in /h output"; Exit 1 }
+
+# Test 0b3 - verify alias /v behaves like --version
+Write-Host "Running unit test: /v outputs version"
+$verOut2 = & $autoit.Path $script.Path '/v'
+if ($LASTEXITCODE -ne 0) { Write-Error "Unit test failed: /v did not exit 0 (rc=$LASTEXITCODE)"; Exit 2 }
+if (-not ($verOut2 -match '1.0.0')) { Write-Error "Unit test failed: expected '1.0.0' in /v output"; Exit 3 }
+
+# Test 0b4 - verify alias /version behaves like --version
+Write-Host "Running unit test: /version outputs version"
+$verOut3 = & $autoit.Path $script.Path '/version'
+if ($LASTEXITCODE -ne 0) { Write-Error "Unit test failed: /version did not exit 0 (rc=$LASTEXITCODE)"; Exit 2 }
+if (-not ($verOut3 -match '1.0.0')) { Write-Error "Unit test failed: expected '1.0.0' in /version output"; Exit 3 }
+
 # Test 0c - console flag should be accepted and when combined with --help it should still print Usage
 Write-Host "Running unit test: --console + --help still prints usage"
 $consoleHelpOut = pwsh -NoProfile -File $autoit.Path $script.Path '--console' '--help' 2>&1
 if ($LASTEXITCODE -ne 0) { Write-Error "Unit test failed: --console --help did not exit 0 (rc=$LASTEXITCODE)"; Exit 4 }
 if (-not ($consoleHelpOut -match 'Usage')) { Write-Error "Unit test failed: expected 'Usage' in --console --help output"; Exit 5 }
+
+# Test 0d - console config option should force console mode even without --console
+Write-Host "Running unit test: launcher.ini console=1 forces console mode"
+# preserve existing launcher.ini
+$projectRootIni = Join-Path $here "..\..\launcher.ini"
+$backupIniConsole = ""
+if (Test-Path $projectRootIni) { $backupIniConsole = Join-Path $here "..\tmp\launcher.ini.console.bak"; Copy-Item $projectRootIni $backupIniConsole -Force }
+$iniConsole = @"
+[general]
+console=1
+logenabled=0
+"@
+$iniConsole | Out-File -FilePath $projectRootIni -Encoding ASCII
+$consoleCfgOut = pwsh -NoProfile -File $autoit.Path $script.Path '--help' 2>&1
+if ($LASTEXITCODE -ne 0) { Write-Error "Unit test failed: --help with console config returned non-zero rc=$LASTEXITCODE"; Exit 6 }
+if (-not ($consoleCfgOut -match 'FORCE_CONSOLE' -or $consoleCfgOut -match 'Usage')) { Write-Error "Unit test failed: expected FORCE_CONSOLE or Usage when console=1 in ini"; Exit 7 }
+# cleanup
+Remove-Item $projectRootIni -Force
+if (Test-Path $backupIniConsole) { Move-Item $backupIniConsole $projectRootIni -Force }
 # Test 1 - basic logfile creation
 $args = "/debugnoexec=1 /debugnosleep=1 /logenabled=1 /loglevel=4 /logfile=`"$tmpLog`""
 & $autoit.Path $script.Path $args

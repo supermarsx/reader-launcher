@@ -90,6 +90,9 @@ Local $raw_autodiscover_persist = IniRead($cfg_filename, $cfg_section1, "autodis
 ; Extra params and presets
 Local $raw_extra_params = IniRead($cfg_filename, $cfg_section1, "extra_params", "")
 Local $raw_preset = IniRead($cfg_filename, $cfg_section1, "preset", "")
+; Console mode preference in ini (0/1) — when set, the launcher behaves as console
+Local $raw_console = IniRead($cfg_filename, $cfg_section1, "console", 0)
+Local $cfg_console = Int($raw_console)
 
 ; Normalize / coerce to numeric where required ? use Int() to convert string
 ; values from INI to integers and protect our runtime logic.
@@ -141,6 +144,8 @@ debug($dbg_message)
 Local $g_hasConsole = False
 Local $dllRet = DllCall("kernel32.dll", "ptr", "GetConsoleWindow")
 If @error = 0 And IsArray($dllRet) And $dllRet[0] <> 0 Then $g_hasConsole = True
+; If the INI requests console mode, honor it (overrides absence of console window)
+If $cfg_console = 1 Then $g_hasConsole = True
 
 ; run early CLI checks for --help / --version before potentially sleeping
 _CheckForHelpAndVersion()
@@ -161,10 +166,10 @@ Func _CheckForHelpAndVersion()
 			$g_hasConsole = True
 			ContinueLoop
 		EndIf
-		If $a = "--help" Or $a = "-h" Or $a = "/?" Or $a = "/help" Then
+		If $a = "--help" Or $a = "-h" Or $a = "/?" Or $a = "/help" Or $a = "/h" Then
 			_ShowUsage()
 			Exit 0
-		ElseIf $a = "--version" Or $a = "-v" Or $a = "/version" Then
+		ElseIf $a = "--version" Or $a = "-v" Or $a = "/version" Or $a = "/v" Then
 			_ShowVersion()
 			Exit 0
 		EndIf
@@ -177,13 +182,13 @@ Func _ShowUsage()
 		ConsoleWrite("Usage: " & $APP_NAME & " [options] [file(s)]" & @CRLF)
 		ConsoleWrite(@CRLF)
 		ConsoleWrite("Options:" & @CRLF)
-		ConsoleWrite("  --help, -h, /?          Show this help and exit" & @CRLF)
-		ConsoleWrite("  --version, -v           Print version information and exit" & @CRLF)
+		ConsoleWrite("  --help, -h, /? /h       Show this help and exit" & @CRLF)
+		ConsoleWrite("  --version, -v /v /version Print version information and exit" & @CRLF)
 		ConsoleWrite("  /debug=1                Enable debug (message boxes)" & @CRLF)
 		ConsoleWrite("  /debugnosleep=1         Skip sleep (for testing)" & @CRLF)
 		ConsoleWrite("  /debugnoexec=1          Skip executing the target (dry-run)" & @CRLF)
 	Else
-		MsgBox(0, $APP_NAME & ' ' & $APP_VERSION, 'Usage: ' & $APP_NAME & ' [options] [file(s)]' & @CRLF & @CRLF & 'Options:' & @CRLF & '/? or --help - Show this help' & @CRLF & '--version or -v - Print version')
+		MsgBox(0, $APP_NAME & ' ' & $APP_VERSION, 'Usage: ' & $APP_NAME & ' [options] [file(s)]' & @CRLF & @CRLF & 'Options:' & @CRLF & '/? or --help or /h - Show this help' & @CRLF & '--version or -v or /v - Print version')
 	EndIf
 EndFunc   ;==>_ShowUsage
 

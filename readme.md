@@ -39,8 +39,8 @@ reader_launcher.exe /debug=1 /debugnosleep=1 "C:\file.pdf"
 
 Common quick-help flags are supported by the compiled executable:
 
-- `--help`, `-h`, or `/?` — print a short usage summary and exit (exit code 0)
-- `--version` or `-v` — print the bundled version string and exit (exit code 0)
+- `--help`, `-h`, `/h` or `/?` — print a short usage summary and exit (exit code 0)
+- `--version`, `-v`, `/v` or `/version` — print the bundled version string and exit (exit code 0)
  - `--console` or `-c` — force console mode (print help/version to stdout) even when running without a console (e.g., double-click)
 ```
 
@@ -66,6 +66,8 @@ The value file `launcher.ini` contains the [general] section with the following 
 - `autodiscover_persist` — When `1`, persist discovered path back into `launcher.ini`. Default: `0`.
 - `extra_params` — Optional additional argument string to prepend to every execution (useful to pass flags like `/s` to Acrobat). Default: empty.
 - `preset` — Name of a pre-defined parameter preset that will be prepended to the parameter list. Presets are defined in the `[presets]` section and common Acrobat presets are included by default.
+
+- `console` — When `1`, the compiled launcher will behave as a console-mode utility (print help/version to stdout) even when run from GUI/Explorer. Default: `0`.
 
 Presets can be added / overridden in a `[presets]` INI section. See `launcher.example.ini` for examples.
 

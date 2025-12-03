@@ -87,15 +87,31 @@ jobs:
             if ($LASTEXITCODE -ne 0) { Write-Error "--help returned non-zero for $n (rc=$LASTEXITCODE)"; exit 1 }
             if ($help -notmatch 'Usage') { Write-Error "--help output for $n did not contain Usage"; Write-Host "Output:\n$help"; exit 1 }
 
+            Write-Host "Testing $path /h"
+            $help2 = & $path '/h' 2>&1
+            if ($LASTEXITCODE -ne 0) { Write-Error "/h returned non-zero for $n (rc=$LASTEXITCODE)"; exit 1 }
+            if ($help2 -notmatch 'Usage') { Write-Error "/h output for $n did not contain Usage"; Write-Host "Output:\n$help2"; exit 1 }
+
             Write-Host "Testing $path --version"
             $vout = & $path '--version' 2>&1
             if ($LASTEXITCODE -ne 0) { Write-Error "--version returned non-zero for $n (rc=$LASTEXITCODE)"; exit 1 }
             if ($vout -notmatch [regex]::Escape($ver)) { Write-Error "--version output for $n did not contain VERSION ($ver). Output: $vout"; exit 1 }
-            # also test forcing console mode combined with help
-            Write-Host "Testing $path --console --help"
-            $consoleHelp = & $path '--console' '--help' 2>&1
-            if ($LASTEXITCODE -ne 0) { Write-Error "--console --help returned non-zero for $n (rc=$LASTEXITCODE)"; exit 1 }
-            if ($consoleHelp -notmatch 'Usage') { Write-Error "--console --help output for $n did not contain Usage"; Write-Host "Output:\n$consoleHelp"; exit 1 }
+
+            Write-Host "Testing $path /v"
+            $vout2 = & $path '/v' 2>&1
+            if ($LASTEXITCODE -ne 0) { Write-Error "/v returned non-zero for $n (rc=$LASTEXITCODE)"; exit 1 }
+            if ($vout2 -notmatch [regex]::Escape($ver)) { Write-Error "/v output for $n did not contain VERSION ($ver). Output: $vout2"; exit 1 }
+
+            Write-Host "Testing $path /version"
+            $vout3 = & $path '/version' 2>&1
+            if ($LASTEXITCODE -ne 0) { Write-Error "/version returned non-zero for $n (rc=$LASTEXITCODE)"; exit 1 }
+            if ($vout3 -notmatch [regex]::Escape($ver)) { Write-Error "/version output for $n did not contain VERSION ($ver). Output: $vout3"; exit 1 }
+
+            # also test forcing console mode combined with help (use /h alias)
+            Write-Host "Testing $path --console /h"
+            $consoleHelp = & $path '--console' '/h' 2>&1
+            if ($LASTEXITCODE -ne 0) { Write-Error "--console /h returned non-zero for $n (rc=$LASTEXITCODE)"; exit 1 }
+            if ($consoleHelp -notmatch 'Usage') { Write-Error "--console /h output for $n did not contain Usage"; Write-Host "Output:\n$consoleHelp"; exit 1 }
           }
 
       - name: Run AutoIt unit tests
