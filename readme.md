@@ -111,7 +111,7 @@ Specifically these scripts are provided:
 - `scripts/test.ps1` — runs tests under `tests/` (`validate-config.ps1`, `autodiscovery-test.ps1`).
 - `scripts/build.ps1` — attempt to compile `reader_launcher.au3` into `dist\\reader_launcher.exe` using Aut2Exe if installed.
 - `scripts/verify-release.ps1` — helper to verify downloaded artifacts against `dist/checksums.txt` (checksums-only verification).
-- `scripts/bump-version.ps1` — helper to bump or set the repository `VERSION` and synchronize the `APP_VERSION` constant and wrapper resource version lines in `src/reader_launcher.au3`.
+-- `scripts/bump-version.ps1` — helper to bump or set the repository version (root-level `VERSION` file) and synchronize the `APP_VERSION` constant and wrapper resource version lines in `src/reader_launcher.au3`.
 
 
 Example quick checks (PowerShell):
@@ -170,15 +170,9 @@ If you want to double-check the file on a public scanner you can paste the SHA25
 
 Autoversioning
 
-- The repository maintains a root-level `VERSION` file (e.g., `1.0.0`) as the single source of truth for the release version. Use `scripts/bump-version.ps1` to set or bump the version (patch/minor/major), which will update `VERSION` and sync `src/reader_launcher.au3` resource and APP_VERSION constants.
+-- The repository maintains a root-level `VERSION` file (e.g., `1.0.0`) as the single source of truth for the release version. Use `scripts/bump-version.ps1` to set or bump the version (patch/minor/major), which will update the `VERSION` file and sync `src/reader_launcher.au3` resource and APP_VERSION constants.
 
 These helper scripts are intentionally forgiving so you can run the code and tests on developer machines without extra tooling installed; CI runners used by this project install AutoIt and UPX so they run all steps end-to-end.
-
----
-
-If you'd like, I can also:
-
-- Add additional release-time checks such as ensuring uploaded release assets match `checksums.txt` exactly (strict verification).
 
 
 ## Diagnostic / Tests

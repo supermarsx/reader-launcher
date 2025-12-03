@@ -71,7 +71,7 @@ jobs:
             if (-not (Test-Path $path)) { Write-Error "Missing expected exe: $path"; $fail = $true; continue }
             $vi = (Get-Item $path).VersionInfo
             if (-not $vi.ProductVersion -or -not $vi.FileDescription -or -not $vi.ProductName) { Write-Error "Missing metadata in $name (ProductVersion/FileDescription/ProductName)"; $fail = $true; continue }
-            if ($vi.ProductVersion -notlike "*$ver*") { Write-Error "ProductVersion ($($vi.ProductVersion)) does not contain VERSION ($ver) for $name"; $fail = $true } else { Write-Host "Metadata for $name: ProductVersion=$($vi.ProductVersion) ProductName=$($vi.ProductName) FileDescription=$($vi.FileDescription)" }
+            if ($vi.ProductVersion -notlike "*$ver*") { Write-Error ("ProductVersion ({0}) does not contain version ({1}) for {2}" -f $vi.ProductVersion, $ver, $name); $fail = $true } else { Write-Host (("Metadata for {0}: ProductVersion={1} ProductName={2} FileDescription={3}" -f $name, $vi.ProductVersion, $vi.ProductName, $vi.FileDescription)) }
           }
           if ($fail) { exit 1 }
 
