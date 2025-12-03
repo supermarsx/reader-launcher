@@ -21,7 +21,9 @@ Push-Location $here\.. | Out-Null
 # record exact inputs
 $commit = (git rev-parse --verify HEAD) 2>$null
 if ($LASTEXITCODE -ne 0) { $commit = "(no git info)" }
-$ver = (Get-Content -Path VERSION -Raw).Trim()
+$repoRoot = (Join-Path $here '..') | Resolve-Path -ErrorAction Stop
+$verCandidate = Get-ChildItem -Path $repoRoot -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ieq 'VERSION' -or $_.Name -ieq 'version' } | Select-Object -First 1
+if ($verCandidate) { $ver = (Get-Content -Path $verCandidate.FullName -Raw).Trim() } else { Write-Error "No version file found in repo root"; exit 1 }
 Write-Host "Repro build at commit: $commit, VERSION: $ver"
 
 # ensure a clean step-by-step build run

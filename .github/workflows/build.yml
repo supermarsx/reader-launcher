@@ -102,7 +102,9 @@ jobs:
           $check = @( 'reader_launcher.exe', 'reader_launcher-upx.exe' )
           Add-Type -AssemblyName System.Drawing
           $fail = $false
-          $ver = (Get-Content -Path VERSION -Raw).Trim()
+          $verFile = Get-ChildItem -Path $PWD -File | Where-Object { $_.Name -ieq 'VERSION' -or $_.Name -ieq 'version' } | Select-Object -First 1
+          if (-not $verFile) { Write-Error 'No version file found in repo root'; exit 1 }
+          $ver = (Get-Content -Path $verFile.FullName -Raw).Trim()
           foreach ($name in $check) {
             $path = Join-Path $PWD 'dist' $name
             if (-not (Test-Path $path)) { Write-Error "Missing expected exe: $path"; $fail = $true; continue }
@@ -166,7 +168,9 @@ jobs:
         if: steps.ensure-wrapper.outputs.wrapper-found == 'true'
         shell: pwsh
         run: |
-          $ver = (Get-Content -Path VERSION -Raw).Trim()
+          $verFile = Get-ChildItem -Path $PWD -File | Where-Object { $_.Name -ieq 'VERSION' -or $_.Name -ieq 'version' } | Select-Object -First 1
+          if (-not $verFile) { Write-Error 'No version file found in repo root'; exit 1 }
+          $ver = (Get-Content -Path $verFile.FullName -Raw).Trim()
           $exeList = @( 'reader_launcher.exe', 'reader_launcher-upx.exe' )
           foreach ($n in $exeList) {
             $path = Join-Path $PWD 'dist' $n
@@ -233,7 +237,9 @@ jobs:
         shell: pwsh
         run: |
           Write-Warning 'AutoIt3Wrapper was not available on runner — running relaxed tests (no --console forced checks). This will not fail CI but will warn if console output was not present.'
-          $ver = (Get-Content -Path VERSION -Raw).Trim()
+          $verFile = Get-ChildItem -Path $PWD -File | Where-Object { $_.Name -ieq 'VERSION' -or $_.Name -ieq 'version' } | Select-Object -First 1
+          if (-not $verFile) { Write-Error 'No version file found in repo root'; exit 1 }
+          $ver = (Get-Content -Path $verFile.FullName -Raw).Trim()
           $exeList = @( 'reader_launcher.exe', 'reader_launcher-upx.exe' )
           foreach ($n in $exeList) {
             $path = Join-Path $PWD 'dist' $n

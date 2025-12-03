@@ -62,8 +62,12 @@ if (-not $aut2exe) {
 
 Write-Host "Compiling $src -> $out"
 ## Read project version for informational purposes (keeps logs clear)
-$verFile = Join-Path $here "..\VERSION"
-if (Test-Path $verFile) { $projVer = (Get-Content -Path $verFile -Raw).Trim(); Write-Host "Project VERSION: $projVer" }
+# Resolve the repository root and find a version file case-insensitively (allow 'version' or 'VERSION')
+$repoRoot = (Join-Path $here '..') | Resolve-Path -ErrorAction Stop
+$verCandidate = Get-ChildItem -Path $repoRoot -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ieq 'VERSION' -or $_.Name -ieq 'version' } | Select-Object -First 1
+$verFile = $null
+if ($verCandidate) { $verFile = $verCandidate.FullName }
+if ($verFile -and (Test-Path $verFile)) { $projVer = (Get-Content -Path $verFile -Raw).Trim(); Write-Host "Project VERSION: $projVer" }
 try {
     # detect an icon file in assets (pick the first .ico) and include it when invoking Aut2Exe
     $assetsDir = Join-Path $here "..\assets"

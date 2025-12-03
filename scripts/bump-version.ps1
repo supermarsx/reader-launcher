@@ -28,7 +28,14 @@ Set-StrictMode -Version Latest
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Resolve-Path -Path $root | Select-Object -ExpandProperty Path
 $src = Join-Path $root '..\src\reader_launcher.au3' | Resolve-Path -ErrorAction Stop
-$versionPath = Join-Path $root '..\VERSION' | Resolve-Path -ErrorAction Stop
+$repoRoot = (Join-Path $root '..') | Resolve-Path -ErrorAction Stop
+# Look for a version file case-insensitively (allow 'VERSION' or 'version')
+$versionCandidate = Get-ChildItem -Path $repoRoot -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ieq 'VERSION' -or $_.Name -ieq 'version' } | Select-Object -First 1
+if ($versionCandidate) { $versionPath = $versionCandidate.FullName } else {
+    # If not found, create a lowercase 'version' file as the canonical single source of truth
+    $versionPath = Join-Path $repoRoot 'version'
+    if (-not (Test-Path $versionPath)) { Set-Content -Path $versionPath -Value '0.0.0' -NoNewline -Encoding ASCII }
+}
 
 function Parse-Version($v) {
     $parts = $v -split '\.' | ForEach-Object { [int]$_ }
