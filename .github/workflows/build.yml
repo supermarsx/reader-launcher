@@ -17,6 +17,9 @@ jobs:
       - name: Install UPX via Chocolatey
         run: choco install upx -y
 
+      - name: Install rcedit (optional, used for post-compile metadata embed) via Chocolatey
+        run: choco install rcedit -y || Write-Host 'rcedit may not be available on this runner; post-compile metadata fix will be skipped if missing.'
+
       - name: Ensure AutoIt3Wrapper exists (required for console-capable builds)
         shell: pwsh
         run: |
@@ -25,7 +28,9 @@ jobs:
             $candidates = @("C:\\Program Files (x86)\\AutoIt3\\AutoIt3Wrapper\\AutoIt3Wrapper.exe","C:\\Program Files\\AutoIt3\\AutoIt3Wrapper\\AutoIt3Wrapper.exe","C:\\Program Files (x86)\\AutoIt3\\AutoIt3Wrapper.exe","C:\\Program Files\\AutoIt3\\AutoIt3Wrapper.exe")
             foreach ($p in $candidates) { if (Test-Path $p) { $wrapper = $p; break } }
           }
-          if (-not $wrapper) { Write-Error "AutoIt3Wrapper not found on runner. Please install AutoIt3Wrapper or ensure AutoIt is installed with AutoIt3Wrapper support. Aborting to ensure console-capable EXEs are built."; exit 1 }
+          if (-not $wrapper) { Write-Host "AutoIt3Wrapper not found on runner. Attempting to install AutoIt via Chocolatey (which typically includes AutoIt3Wrapper)..."; choco install autoit -y }
+          $wrapper = Get-Command AutoIt3Wrapper -ErrorAction SilentlyContinue
+          if (-not $wrapper) { Write-Error "AutoIt3Wrapper not found on runner after attempting install. Please ensure AutoIt3Wrapper is available for the build (CI requires AutoIt3Wrapper to produce console-capable EXEs). Aborting."; exit 1 }
           Write-Host "Found AutoIt3Wrapper: $wrapper"
 
       - name: Run build script

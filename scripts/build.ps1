@@ -198,4 +198,51 @@ Get-ChildItem -Path $outDir -File | ForEach-Object {
     "$($_.Name) SHA256:$sha256 SHA512:$sha512" | Out-File -FilePath $checksums -Append -Encoding ASCII
 }
 Write-Host "Checksums written to: $checksums"
+
+# -----------------------------------------------------------------------------
+# Post-compile: attempt to embed metadata and ensure console capability (rcedit)
+# If rcedit is available on runner, use it to set ProductVersion/FileVersion
+# and FileDescription/ProductName based on source wrapper directives or VERSION.
+# This is optional but helps when Aut2Exe does not embed wrapper resources.
+# -----------------------------------------------------------------------------
+Write-Host "Attempting post-compile metadata fix using rcedit (if available)"
+$rcedit = Get-Command rcedit -ErrorAction SilentlyContinue
+if (-not $rcedit) {
+    $rceditCandidates = @("C:\\Program Files\\rcedit\\rcedit.exe","C:\\Program Files (x86)\\rcedit\\rcedit.exe","C:\\ProgramData\\chocolatey\\bin\\rcedit.exe")
+    foreach ($p in $rceditCandidates) { if (Test-Path $p) { $rcedit = $p; break } }
+}
+if ($rcedit) {
+    Write-Host "Found rcedit: $rcedit" -ForegroundColor Cyan
+    # Read version/product strings from source wrapper or VERSION file
+    $sourceText = Get-Content -Path $src -Raw -ErrorAction SilentlyContinue
+    $wrappedFileVer = '' ; $wrappedProdVer = '' ; $prodName = '' ; $fileDesc = ''
+    if ($sourceText) {
+        $m = [regex]::Match($sourceText, "AutoIt3Wrapper_Res_Fileversion=(?<fv>.*)")
+        if ($m.Success) { $wrappedFileVer = $m.Groups['fv'].Value.Trim() }
+        $m = [regex]::Match($sourceText, "AutoIt3Wrapper_Res_ProductVersion=(?<pv>.*)")
+        if ($m.Success) { $wrappedProdVer = $m.Groups['pv'].Value.Trim() }
+        $m = [regex]::Match($sourceText, "AutoIt3Wrapper_Res_ProductName=(?<pn>.*)")
+        if ($m.Success) { $prodName = $m.Groups['pn'].Value.Trim() }
+        $m = [regex]::Match($sourceText, "AutoIt3Wrapper_Res_FileDescription=(?<fd>.*)")
+        if ($m.Success) { $fileDesc = $m.Groups['fd'].Value.Trim() }
+    }
+    if (-not $wrappedProdVer -and Test-Path $verFile) { $wrappedProdVer = (Get-Content -Path $verFile -Raw).Trim() }
+    if (-not $wrappedFileVer -and $wrappedProdVer) { $wrappedFileVer = $wrappedProdVer + ".0" }
+
+    # apply metadata to non-upx and upx exes
+    $applyTo = @($out, $out_upx)
+    foreach ($f in $applyTo) {
+        if (Test-Path $f) {
+            $args = @()
+            if ($wrappedFileVer) { $args += "--set-file-version"; $args += $wrappedFileVer }
+            if ($wrappedProdVer) { $args += "--set-product-version"; $args += $wrappedProdVer }
+            if ($prodName) { $args += "--set-version-string"; $args += "ProductName"; $args += $prodName }
+            if ($fileDesc) { $args += "--set-version-string"; $args += "FileDescription"; $args += $fileDesc }
+            if ($args.Count -gt 0) {
+                Write-Host "Applying metadata to: $f with args: $($args -join ' ')"
+                & "$rcedit" $f $args *>&1 | Tee-Object -FilePath ([IO.Path]::GetTempFileName() + '.rcedit.log')
+            } else { Write-Host "No metadata fields found to apply for $f" }
+        }
+    }
+} else { Write-Host "rcedit not found; skipping post-compile metadata step (optional)." }
 Exit 0
