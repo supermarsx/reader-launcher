@@ -32,8 +32,8 @@ Write-Host "Repro build at commit: $commit, VERSION: $ver"
 # collect artifacts and checksums
 $files = Get-ChildItem -Path $OutDir -File | Sort-Object Name
 $manifest = [ordered]@{
-    Commit = $commit
-    Version = $ver
+    Commit    = $commit
+    Version   = $ver
     Timestamp = (Get-Date).ToString("o")
     Artifacts = @()
 }
