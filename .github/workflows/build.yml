@@ -21,7 +21,18 @@ jobs:
         run: choco install rcedit -y || Write-Host 'rcedit may not be available on this runner; post-compile metadata fix will be skipped if missing.'
 
       - name: Attempt to install AutoIt3Wrapper via Chocolatey (best-effort)
-        run: choco install autoit3wrapper -y || choco install au3wrapper -y || Write-Host 'autoit3wrapper not available in chocolatey; will try other fallbacks.'
+        # This step is best-effort and must not fail the entire workflow when the package isn't available.
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $err = $false
+          try {
+            choco install autoit3wrapper -y
+          } catch { $err = $true; Write-Host 'choco autoit3wrapper failed (expected on some runners): ' + $_.Exception.Message }
+          if ($err) {
+            try { choco install au3wrapper -y } catch { Write-Host 'au3wrapper not available via choco either; will try other fallbacks.' }
+          }
+          if ($err) { Write-Host 'autoit3wrapper/choco fallback did not acquire AutoIt3Wrapper; the ensure-wrapper step will try additional locations and a best-effort download.' }
 
       - id: ensure-wrapper
         name: Ensure AutoIt3Wrapper exists (best-effort — do not fail CI)
