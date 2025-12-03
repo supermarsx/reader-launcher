@@ -86,7 +86,7 @@ jobs:
           }
 
       - name: Run build script
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\build.ps1
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1
 
       - name: Verify produced artifacts
         run: |
