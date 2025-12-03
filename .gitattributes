@@ -1,0 +1,11 @@
+# Hide PowerShell scripts from GitHub language stats
+# Mark common PowerShell file types as linguist-generated so they are excluded
+*.ps1 linguist-generated
+*.psm1 linguist-generated
+*.psd1 linguist-generated
+
+# Also mark scripts/ and tests/ PowerShell files explicitly
+scripts/*.ps1 linguist-generated
+tests/**/*.ps1 linguist-generated
+
+# If you want to hide other helper files from language stats, add them here
