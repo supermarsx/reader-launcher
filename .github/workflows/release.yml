@@ -53,7 +53,7 @@ jobs:
         run: |
           echo "Setting version to $TAG_NAME"
           pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Version $TAG_NAME
-          git add VERSION src/reader_launcher.au3 || true
+          git add version src/reader_launcher.au3 || true
           if ! git diff --cached --quiet; then
             git commit -m "chore(release): bump version to $TAG_NAME [skip ci]" || true
           fi
