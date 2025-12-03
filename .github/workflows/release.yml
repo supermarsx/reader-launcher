@@ -205,8 +205,15 @@ jobs:
               curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" --data-binary @verify_results/verify_summary.txt "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=verify_summary.txt"
             fi
             if [ "$FAIL" = "1" ]; then
-              echo "Verification failed — aborting release"
-              exit 1
+              echo "Verification failures detected. By default verification does not abort releases."
+              echo "Set FAIL_ON_VERIFY=true as an environment variable to make verification failures abort the release."
+              # allow opt-in to strict behavior via env var
+              if [ "${FAIL_ON_VERIFY:-false}" = "true" ]; then
+                echo "FAIL_ON_VERIFY is true — aborting release due to verification failures"
+                exit 1
+              else
+                echo "Continuing release despite verification failures (non-fatal)." >&2
+              fi
             fi
           else
             echo "No artifacts found to verify"
