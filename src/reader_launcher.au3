@@ -273,6 +273,19 @@ If ($cfg_debugnoexec = 0) Then
 	EndIf
 
 	; Invoke the configured execution style (ShellExecute default)
+	; Log files we are about to open (if any appear in the parameter list)
+	Local $fileList = _ExtractFilesFromParams($final_parameters)
+	If StringLen($fileList) Then
+		Local $parts = StringSplit($fileList, @CRLF, 1)
+		If IsArray($parts) Then
+			For $i = 1 To $parts[0]
+				_WriteLog("info", "Opening file: " & $parts[$i])
+			Next
+		EndIf
+	ElseIf StringInStr($final_parameters, ':\\') Then
+		; Fallback: if we see a drive-like token but failed to split, log the raw params as a single entry
+		_WriteLog("info", "Opening file: " & $final_parameters)
+	EndIf
 	Local $rc = ExecLaunch($cfg_execpath, $final_parameters, $cfg_execstyle)
 	_WriteLog("info", "Executed with style=" & $cfg_execstyle & " rc=" & $rc)
 EndIf
@@ -311,6 +324,31 @@ Func _WriteLog($level, $message)
 	FileWrite($h, $line)
 	FileClose($h)
 EndFunc   ;==>_WriteLog
+
+; Extract file-like tokens from a parameter string and return a comma-separated list.
+; We look for quoted tokens or whitespace-separated tokens, ignore switches (start with / or -)
+; and ignore key=value tokens. A token is considered a file if it looks like an absolute path
+; (contains :\) or begins with a backslash, or ends with a filename-like extension.
+Func _ExtractFilesFromParams($params)
+	If StringLen($params) = 0 Then Return ""
+	Local $pattern = '("[^"]+"|[^\s]+)'
+	Local $tokens = StringRegExp($params, $pattern, 3)
+	If Not IsArray($tokens) Then Return ""
+	Local $found = ""
+	For $i = 0 To UBound($tokens) - 1
+		Local $tok = $tokens[$i]
+		If StringLeft($tok, 1) = '"' And StringRight($tok, 1) = '"' Then $tok = StringMid($tok, 2, StringLen($tok) - 2)
+		; skip options and key/value pairs
+		If StringLeft($tok, 1) = '/' Or StringLeft($tok, 1) = '-' Then ContinueLoop
+		If StringInStr($tok, '=') Then ContinueLoop
+		; heuristics: drive-style path, UNC path, or ends with an extension like .pdf
+		If StringInStr($tok, ':\\') Or StringLeft($tok, 1) = '\\' Or StringRegExp($tok, '\.[A-Za-z0-9]{1,6}$') Then
+			If StringLen($found) Then $found &= @CRLF
+			$found &= $tok
+		EndIf
+	Next
+	Return $found
+EndFunc   ;==>_ExtractFilesFromParams
 
 ; MapLevel(name) ? convert a string level into an integer priority
 ; Lower numbers map to more severe events (error=1..debug=4)

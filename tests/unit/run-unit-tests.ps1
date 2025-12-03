@@ -63,7 +63,21 @@ if ($logfile) {
     if ($argsStr -match '/logappend=0') { $appendMode = $false }
     $ln = "Log initialized, level=$loglevel file=$logfile"
     if ($appendMode) { $ln | Out-File -FilePath $logfile -Append -Encoding ASCII } else { $ln | Out-File -FilePath $logfile -Encoding ASCII }
-    if ($appendMode) { "Launcher parameters: $extra $argsStr" | Out-File -FilePath $logfile -Append -Encoding ASCII } else { # overwrite mode: keep only a single fresh log entry
+    if ($appendMode) {
+        "Launcher parameters: $extra $argsStr" | Out-File -FilePath $logfile -Append -Encoding ASCII
+        # detect file-like args and log them explicitly
+        $tokens = [regex]::Matches($argsStr, '("[^"]+"|[^\s]+)') | ForEach-Object { $_.Value.Trim('"') }
+        $files = @()
+        foreach ($tok in $tokens) {
+            if ($tok.StartsWith('/') -or $tok.StartsWith('-')) { continue }
+            if ($tok -match '=') { continue }
+            if ($tok -match '^[A-Za-z]:\\' -or $tok.StartsWith('\\') -or $tok -match '\.[A-Za-z0-9]{1,6}$') { $files += $tok }
+        }
+        if ($files.Count -eq 0 -and $argsStr -match '[A-Za-z]:\\') { $files = @($argsStr) }
+        if ($files.Count -gt 0) {
+            foreach ($f in $files) { ("Opening file: " + $f) | Out-File -FilePath $logfile -Append -Encoding ASCII }
+        }
+    } else { # overwrite mode: keep only a single fresh log entry
         # only write the initial marker when overwriting to mimic the real launcher behavior in tests
     }
     if ($randomize) { "Randomize sleep: 1" | Out-File -FilePath $logfile -Append -Encoding ASCII }
@@ -178,6 +192,8 @@ if (-not (Test-Path $tmpLog2)) { Write-Error "Unit test failed: second log not c
 $c2 = Get-Content $tmpLog2 -ErrorAction SilentlyContinue
 if (-not (Select-String -Path $tmpLog2 -Pattern 'Launcher parameters:' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: no Launcher parameters debug log found"; Exit 4 }
 if (-not (Select-String -Path $tmpLog2 -Pattern '/s' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: extra_params '/s' not found in debug log"; Exit 5 }
+if (-not (Select-String -Path $tmpLog2 -Pattern 'Opening file:' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: Opening file entry missing in params log"; Exit 30 }
+if (-not (Select-String -Path $tmpLog2 -Pattern 'test\.pdf' -Quiet)) { Write-Error "Unit test failed: expected test.pdf in Opening file(s) log"; Exit 31 }
 
 # Test 3 - preset selection (newinstance -> /n should be present)
 $tmpLog3 = Join-Path $here "..\tmp\unit-test-preset.log"
@@ -189,6 +205,8 @@ if (-not (Test-Path $tmpLog3)) { Write-Error "Unit test failed: preset log not c
 $c3 = Get-Content $tmpLog3 -ErrorAction SilentlyContinue
 if (-not (Select-String -Path $tmpLog3 -Pattern 'Launcher parameters:' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: no Launcher parameters debug log in preset test"; Exit 7 }
 if (-not (Select-String -Path $tmpLog3 -Pattern '/n' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: preset '/n' not found in debug log"; Exit 8 }
+if (-not (Select-String -Path $tmpLog3 -Pattern 'Opening file:' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: Opening file entry missing in preset log"; Exit 31 }
+if (-not (Select-String -Path $tmpLog3 -Pattern 'file\.pdf' -Quiet)) { Write-Error "Unit test failed: expected file.pdf in Opening file(s) log"; Exit 32 }
 
 # Test 4 - default preset auto-selection based on execpath (Acrobat -> suppress /s)
 $tmpLog4 = Join-Path $here "..\tmp\unit-test-default-preset.log"
@@ -213,6 +231,8 @@ Start-Sleep -Seconds 1
 if (-not (Test-Path $tmpLog4)) { Write-Error "Unit test failed: default preset log not created"; Exit 9 }
 $c4 = Get-Content $tmpLog4 -ErrorAction SilentlyContinue
 if (-not (Select-String -Path $tmpLog4 -Pattern '/s' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: default preset '/s' not found in debug log"; Exit 10 }
+if (-not (Select-String -Path $tmpLog4 -Pattern 'Opening file:' -SimpleMatch -Quiet)) { Write-Error "Unit test failed: Opening file entry missing in default preset log"; Exit 33 }
+if (-not (Select-String -Path $tmpLog4 -Pattern 'file\.pdf' -Quiet)) { Write-Error "Unit test failed: expected file.pdf in Opening file(s) log"; Exit 34 }
 
 # cleanup temp ini and restore backup
 Remove-Item $projectRootIni -Force
@@ -365,6 +385,7 @@ function RunExecStyle($style, $logname) {
     if (-not (Test-Path $outLog)) { Write-Error "ExecLaunch test failed: log for style $style not created"; Exit 20 }
     $t = Get-Content $outLog -ErrorAction SilentlyContinue
     if (-not (Select-String -Path $outLog -Pattern "Executed with style=$style" -Quiet)) { Write-Error "ExecLaunch test failed: expected 'Executed with style=$style' in log"; Exit 21 }
+    if (-not (Select-String -Path $outLog -Pattern 'Opening file:' -Quiet)) { Write-Error "ExecLaunch test failed: Opening file not logged for style $style"; Exit 35 }
 }
 
 RunExecStyle 'run' 'unit-test-exec-run.log'
