@@ -1,3 +1,6 @@
+
+<img width="150" height="150" alt="jumbled-abode-icon" src="https://github.com/user-attachments/assets/437fd808-3599-4f4a-a372-a662cd0ca57a" />
+
 # reader-launcher
 
 A tiny, focused Adobe Reader launcher written in AutoIt. The launcher reads a small config file and starts the configured Acrobat/Reader executable with an optional randomized sleep delay and passthrough arguments.
